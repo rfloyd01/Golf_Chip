@@ -20,6 +20,10 @@ void setup()
     while(1);
   }
 
+  //set up the connection interval (i.e. the time between packets of data being sent out over BLE)
+  //1.5ms increments, so 0x0006 = 6 * 1.5 = 7.5ms. 7.5 ms is the minimum value (0x0006) and 4 s is the maximum value (0x0C80)
+  BLE.setConnectionInterval(0x0006, 0x000a); // 7.5 ms minimum, 15 ms maximum
+
   if (!IMU.begin()) //initialize IMU and go to infinite loop if fail
   {
     Serial.println("Starting IMU Failed!");
