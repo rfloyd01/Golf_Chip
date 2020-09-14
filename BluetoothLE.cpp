@@ -13,7 +13,7 @@ using namespace Bluetooth::GenericAttributeProfile;
 
 BLEDevice::BLEDevice(guid ServiceUUID)
 {
-	service_UUID = ServiceUUID;
+    service_UUID = ServiceUUID;
 }
 
 void BLEDevice::Connect()
@@ -23,7 +23,7 @@ void BLEDevice::Connect()
 
 void BLEDevice::SetUpDeviceWatcher()
 {
-	//This function starts a BLEDevice watcher and sets up parameters
+    //This function starts a BLEDevice watcher and sets up parameters
 
     bleAdvertisementsWatcher = Bluetooth::Advertisement::BluetoothLEAdvertisementWatcher();
     bleAdvertisementsWatcher.ScanningMode(Bluetooth::Advertisement::BluetoothLEScanningMode::Active);
@@ -92,18 +92,48 @@ concurrency::task<void> BLEDevice::connectToBLEDevice(unsigned long long bluetoo
             std::cout << std::dec;
             characteristic.ValueChanged(Windows::Foundation::TypedEventHandler<GattCharacteristic, GattValueChangedEventArgs>([this](GattCharacteristic car, GattValueChangedEventArgs eventArgs)
                 {
-                    auto reader = Windows::Storage::Streams::DataReader::FromBuffer(eventArgs.CharacteristicValue());
-                    std::cout << "Time to read data was " << (float)std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - timer).count() / 1000000.0  << " milliseconds." << std::endl;
+                    float naynay = (float)std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - timer).count() / 1000000.0;
                     timer = std::chrono::steady_clock::now(); //reset timer
+
+                    time_average *= (float)cycle_count / (float)(cycle_count + 1);
+                    cycle_count++;
+                    std::cout << "Current time to read data is " << naynay << " milliseconds." << std::endl;
+                    time_average += naynay / cycle_count;
+
+                    auto reader = Windows::Storage::Streams::DataReader::FromBuffer(eventArgs.CharacteristicValue());
+                    std::cout << "Average time to read data so far is " << time_average << " milliseconds." << std::endl;
+                    
+                    ///TODO: Figure why this function isn't working
                     //reader.ByteOrder(Windows::Storage::Streams::ByteOrder::BigEndian); //BLE uses little Endian which is annoying so switch it
 
+                    //First read acceleration data
                     for (int i = 0; i < 3; i++)
                     {
-                        int32_t ayyy = reader.ReadInt32();
+                        int16_t ayyy = ((reader.ReadByte()) | (reader.ReadByte() << 8));
 
-                        if (i == 0) std::cout << "Ax = " << ConvertInt32toFloat(ayyy) << std::endl;
-                        if (i == 1) std::cout << "Ay = " << ConvertInt32toFloat(ayyy) << std::endl;
-                        if (i == 2) std::cout << "Az = " << ConvertInt32toFloat(ayyy) << std::endl;
+                        if (i == 0) std::cout << "Ax = " << ayyy * accl_conversion << std::endl;
+                        else if (i == 1) std::cout << "Ay = " << ayyy * accl_conversion << std::endl;
+                        else if (i == 2) std::cout << "Az = " << ayyy * accl_conversion << std::endl;
+                    }
+
+                    //Second is gyroscope data
+                    for (int i = 0; i < 3; i++)
+                    {
+                        int16_t ayyy = ((reader.ReadByte()) | (reader.ReadByte() << 8));
+
+                        if (i == 0) std::cout << "Gx = " << ayyy * gyr_conversion << std::endl;
+                        if (i == 1) std::cout << "Gy = " << ayyy * gyr_conversion << std::endl;
+                        if (i == 2) std::cout << "Gz = " << ayyy * gyr_conversion << std::endl;
+                    }
+
+                    //Third is magnet data
+                    for (int i = 0; i < 3; i++)
+                    {
+                        int16_t ayyy = ((reader.ReadByte()) | (reader.ReadByte() << 8));
+
+                        if (i == 0) std::cout << "Mx = " << ayyy * mag_conversion << std::endl;
+                        if (i == 1) std::cout << "My = " << ayyy * mag_conversion << std::endl;
+                        if (i == 2) std::cout << "Mz = " << ayyy * mag_conversion << std::endl;
                     }
                     std::cout << std::endl;
                 }));
