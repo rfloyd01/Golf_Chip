@@ -1,11 +1,11 @@
 #include "pch.h"
-#include "calibration.h"
+#include <Header_Files/calibration.h>
 
 #include <iostream>
 #include <chrono>
 #include <string>
 
-#include "gnuplot.h"
+#include <Header_Files/gnuplot.h>
 
 Calibration::Calibration(BLEDevice* sensor)
 {
