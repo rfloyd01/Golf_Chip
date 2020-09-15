@@ -1,5 +1,5 @@
 #include "pch.h"
-#include "gnuplot.h"
+#include <Header_Files/gnuplot.h>
 
 Gnuplot::Gnuplot()
 {
