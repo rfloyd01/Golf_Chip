@@ -4,11 +4,11 @@
 #include <ft2build.h>
 #include FT_FREETYPE_H
 
-#include "graphics.h"
-#include "initialize.h"
-#include "vertices.h"
-#include "stb_image.h"
-#include "gnuplot.h"
+#include <Header_Files/graphics.h>
+#include <Header_Files/initialize.h>
+#include <Header_Files/vertices.h>
+#include <Header_Files/stb_image.h>
+#include <Header_Files/gnuplot.h>
 
 GL::GL()
 {
