@@ -8,8 +8,8 @@
 #include <bitset>
 #include <stdlib.h> 
 
-#include "BluetoothLE.h"
-#include "graphics.h"
+#include <Header_Files/BluetoothLE.h>
+#include <Header_Files/graphics.h>
 
 using namespace winrt;
 using namespace Windows::Foundation;
