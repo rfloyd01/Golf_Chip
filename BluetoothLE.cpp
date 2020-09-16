@@ -251,7 +251,7 @@ void BLEDevice::UpdateCalibrationNumbers()
 {
     int line_count = 0;
     std::fstream inFile;
-    inFile.open("C:/Users/Bobby/Documents/Coding/C++/BLE_33/BLE_33/Resources/calibration.txt");
+    inFile.open("Resources/calibration.txt");
     char name[256];
 
     while (!inFile.eof())
