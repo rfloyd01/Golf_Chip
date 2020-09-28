@@ -1,22 +1,3 @@
-/*
-  This file is part of the Arduino_LSM9DS1 library.
-  Copyright (c) 2019 Arduino SA. All rights reserved.
-
-  This library is free software; you can redistribute it and/or
-  modify it under the terms of the GNU Lesser General Public
-  License as published by the Free Software Foundation; either
-  version 2.1 of the License, or (at your option) any later version.
-
-  This library is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-  Lesser General Public License for more details.
-
-  You should have received a copy of the GNU Lesser General Public
-  License along with this library; if not, write to the Free Software
-  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
-*/
-
 #include "Bobby_LSM9DS1.h"
 
 #define LSM9DS1_ADDRESS            0x6b
@@ -108,10 +89,18 @@ void LSM9DS1Class::end()
 
 int LSM9DS1Class::readData(int16_t *data)
 {
-  if (accelerationAvailable() && gyroscopeAvailable())
+  if (accelerationAvailable())
   {
-    //if (!readRegisters(LSM9DS1_ADDRESS, LSM9DS1_OUT_X_XL, (uint8_t*)data, 12)) //Currently is only reading accelerometer data, do I need to turn on continuous reading?
-    if (!readRegisters(LSM9DS1_ADDRESS, LSM9DS1_OUT_X_G, (uint8_t*)data, 12))
+    if (!readRegisters(LSM9DS1_ADDRESS, LSM9DS1_OUT_X_XL, (uint8_t*)data, 6)) //Currently is only reading accelerometer data, why is this?
+    {
+      //read the first 12 bytes of data, which correspond to acl. and gyro data
+      return 0;
+    }
+  }
+
+  if (gyroscopeAvailable())
+  {
+    if (!readRegisters(LSM9DS1_ADDRESS, LSM9DS1_OUT_X_G, (uint8_t*)data + 6, 6)) //Handling the gyroscope read in a different function than acc. try to combine later
     {
       //read the first 12 bytes of data, which correspond to acl. and gyro data
       return 0;
