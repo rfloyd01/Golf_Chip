@@ -138,6 +138,9 @@ void setup(void)
   DataService.addCharacteristic(RawDataCharacteristic);
   BLE.addService(DataService);
   RawDataCharacteristic.writeValue(data, 18);
+  
+  /* Set desired connection interval for BLE connection */
+  BLE.setConnectionInterval(0x0006, 0x000C); //sets the desired connection interval to be between 7.5ms and 15ms (6 * 1.25 = 7.5 and 12 * 1.25 = 15)
 }
 
 void loop(void)
