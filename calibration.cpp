@@ -36,13 +36,19 @@ void Calibration::CalibrationLoop()
 	{
 		processInput();
 
-		p_sensor->UpdateData();
-		p_sensor->Madgwick();
+		if (cal_mode == 0)
+		{
+			//if calibration mode hasn't been selected yet then just render chip like normal
+			p_sensor->UpdateData();
+			p_sensor->Madgwick();
+			calibration_q = p_sensor->GetRotationQuaternion();
+		}
 
 		LiveUpdate();
 		if (collecting) CheckForNextStep();
 
-		p_graphics->RenderClub(p_sensor->GetRotationQuaternion());
+		//p_graphics->RenderClub(p_sensor->GetRotationQuaternion());
+		p_graphics->RenderClub(calibration_q);
 		p_graphics->RenderText();
 		p_graphics->Swap();
 	}
@@ -68,6 +74,67 @@ void Calibration::LiveUpdate()
 		p_graphics->EditText(0, "Ax = " + std::to_string(p_sensor->ax) + " m/s^2");
 		p_graphics->EditText(1, "Ay = " + std::to_string(p_sensor->ay) + " m/s^2");
 		p_graphics->EditText(2, "Az = " + std::to_string(p_sensor->az) + " m/s^2");
+	}
+}
+
+void Calibration::invertAccMatrix()
+{
+	//inverts the calculated Acc Gain matrix
+	float determinant = acc_gain[0][0] * (acc_gain[1][1] * acc_gain[2][2] - acc_gain[1][2] * acc_gain[2][1]) - acc_gain[0][1] * (acc_gain[1][0] * acc_gain[2][2] - acc_gain[1][2] * acc_gain[2][0]) + acc_gain[0][2] * (acc_gain[1][0] * acc_gain[2][1] - acc_gain[1][1] * acc_gain[2][0]);
+	for (int i = 0; i < 3; i++)
+	{
+		//Transpose the original matrix
+		for (int j = i + 1; j < 3; j++)
+		{
+			float temp = acc_gain[i][j];
+			acc_gain[i][j] = acc_gain[j][i];
+			acc_gain[j][i] = temp;
+		}
+	}
+
+	//Get determinants of 2x2 minor matrices
+	float new_nums[3][3];
+	for (int i = 0; i < 3; i++)
+	{
+		for (int j = 0; j < 3; j++)
+		{
+			int row1, row2, col1, col2;
+			if (i == 0)
+			{
+				row1 = 1; row2 = 2;
+			}
+			if (i == 1)
+			{
+				row1 = 0; row2 = 2;
+			}
+			if (i == 2)
+			{
+				row1 = 0; row2 = 1;
+			}
+			if (j == 0)
+			{
+				col1 = 1; col2 = 2;
+			}
+			if (j == 1)
+			{
+				col1 = 0; col2 = 2;
+			}
+			if (j == 2)
+			{
+				col1 = 0; col2 = 1;
+			}
+			float num = acc_gain[row1][col1] * acc_gain[row2][col2] - acc_gain[row1][col2] * acc_gain[row2][col1];
+			if ((i + j) % 2 == 1) num *= -1;
+			new_nums[i][j] = num;
+		}
+	}
+
+	for (int i = 0; i < 3; i++)
+	{
+		for (int j = 0; j < 3; j++)
+		{
+			acc_gain[i][j] = new_nums[i][j] / determinant;
+		}
 	}
 }
 
@@ -305,10 +372,31 @@ void Calibration::UpdateCalibrationNumbers()
 {
 	if (cal_mode == 1) //update acc calibration numbers
 	{
+		//Order of tumble point text is [+Z, -Y, -X, +Y, +X, -Z]
 		acc_off[0][0] = (acc_cal[0][2] + acc_cal[0][4]) / 2.0;
 		acc_off[1][1] = (acc_cal[1][1] + acc_cal[1][3]) / 2.0;
 		acc_off[2][2] = (acc_cal[2][0] + acc_cal[2][5]) / 2.0;
 
+		//Calculate Gain Matrix
+		acc_gain[0][0] = (acc_cal[0][4] - acc_cal[0][2]) / (2 * gravity);
+		acc_gain[1][0] = (acc_cal[1][4] - acc_cal[1][2]) / (2 * gravity);
+		acc_gain[2][0] = (acc_cal[2][4] - acc_cal[2][2]) / (2 * gravity);
+
+		acc_gain[0][1] = (acc_cal[0][3] - acc_cal[0][1]) / (2 * gravity);
+		acc_gain[1][1] = (acc_cal[1][3] - acc_cal[1][1]) / (2 * gravity);
+		acc_gain[2][1] = (acc_cal[2][3] - acc_cal[2][1]) / (2 * gravity);
+
+		acc_gain[0][2] = (acc_cal[0][0] - acc_cal[0][5]) / (2 * gravity);
+		acc_gain[1][2] = (acc_cal[1][0] - acc_cal[1][5]) / (2 * gravity);
+		acc_gain[2][2] = (acc_cal[2][0] - acc_cal[2][5]) / (2 * gravity);
+
+		//Convert Gain Matrix to it's own inverse
+		invertAccMatrix();
+
+		//TODO - As of right now only the above acceleration numbers seem to be correct, need to inspect logic of below code
+		//The below code tries to get a more precise calibration by ustilizing cross-axis offsets as well as gains, however, there is something slightly off about it
+
+		/*
 		acc_gain[0][0] = gravity / (acc_cal[0][4] - acc_off[0][0]);
 		acc_gain[1][1] = gravity / (acc_cal[1][3] - acc_off[1][1]);
 		acc_gain[2][2] = gravity / (acc_cal[2][0] - acc_off[2][2]);
@@ -334,6 +422,7 @@ void Calibration::UpdateCalibrationNumbers()
 		acc_gain[2][0] = (acc_off[2][0] - acc_cal[2][2]) / acc_cal[0][2];
 		acc_off[2][1] = (acc_cal[2][1] + acc_cal[2][3]) / 2.0;
 		acc_gain[2][1] = (acc_off[2][1] - acc_cal[2][1]) / acc_cal[1][1];
+		*/
 	}
 	else if (cal_mode == 2)
 	{
@@ -349,9 +438,10 @@ void Calibration::AccTest()
 	{
 		text_start = 5; if (live_data) text_start += 3;
 		p_graphics->ClearText(text_start); p_graphics->ClearText(text_start - 1); p_graphics->ClearText(text_start - 2);
-		p_graphics->AddText({ "Lay Sensor flat on table with +Z axis pointing up.", 10, 420, 0.5, {1.0, 1.0, 1.0} });
+		p_graphics->AddText({ "Lay Sensor flat on table with +Z axis pointing down.", 10, 420, 0.5, {1.0, 1.0, 1.0} });
 		p_graphics->AddText({ "Sensor will accumulate data for 5 seconds. Press", 10, 390, 0.5, {1.0, 1.0, 1.0} });
 		p_graphics->AddText({ "enter to continue.", 10, 360, 0.5, {1.0, 1.0, 1.0} });
+		calibration_q = { 1, 0, 0, 0 };
 		cal_stage++;
 	}
 	else if (cal_stage > 0 && cal_stage < 7)
@@ -417,12 +507,33 @@ void Calibration::AccNextStep()
 		}
 		else
 		{
+			//tumble order should be [+Z, -Y, +X, +Y, -X, -Z]
 			p_graphics->AddText({ "Data collection complete. Rotate sensor 90 degrees", 10, 420, 0.5, {1.0, 1.0, 1.0} });
-			if (cal_stage == 2) p_graphics->AddText({ "so that the positive Y-axis is pointing down. ", 10, 390, 0.5, {1.0, 1.0, 1.0} });
-			else if (cal_stage == 3) p_graphics->AddText({ "so that the positive X-axis is pointing down. ", 10, 390, 0.5, {1.0, 1.0, 1.0} });
-			else if (cal_stage == 4) p_graphics->AddText({ "so that the positive Y-axis is pointing up. ", 10, 390, 0.5, {1.0, 1.0, 1.0} });
-			else if (cal_stage == 5) p_graphics->AddText({ "so that the positive X-axis is pointing up. ", 10, 390, 0.5, {1.0, 1.0, 1.0} });
-			else  p_graphics->AddText({ "so that the positive Z-axis is pointing down. ", 10, 390, 0.5, {1.0, 1.0, 1.0} });
+			if (cal_stage == 2)
+			{
+				p_graphics->AddText({ "so that the positive Y-axis is pointing up. ", 10, 390, 0.5, {1.0, 1.0, 1.0} });
+				calibration_q = { .707, 0, 0, .707 }; //changes orientation of chip for rendering purposes
+			}
+			else if (cal_stage == 3) 
+			{
+				p_graphics->AddText({ "so that the positive X-axis is pointing up. ", 10, 390, 0.5, {1.0, 1.0, 1.0} });
+				calibration_q = { .707, .707, 0, 0 }; //changes orientation of chip for rendering purposes
+			}
+			else if (cal_stage == 4)
+			{
+				p_graphics->AddText({ "so that the positive Y-axis is pointing down. ", 10, 390, 0.5, {1.0, 1.0, 1.0} });
+				calibration_q = { .707, 0, 0, -.707 }; //changes orientation of chip for rendering purposes
+			}
+			else if (cal_stage == 5)
+			{
+				p_graphics->AddText({ "so that the positive X-axis is pointing down. ", 10, 390, 0.5, {1.0, 1.0, 1.0} });
+				calibration_q = { .707, -.707, 0, 0 }; //changes orientation of chip for rendering purposes
+			}
+			else
+			{
+				p_graphics->AddText({ "so that the positive Z-axis is pointing up. ", 10, 390, 0.5, {1.0, 1.0, 1.0} });
+				calibration_q = { 0, 0, 0, 1 }; //changes orientation of chip for rendering purposes
+			}
 			p_graphics->AddText({ "Press enter when ready to continue; ", 10, 360, 0.5, {1.0, 1.0, 1.0} });
 		}
 	}
@@ -430,10 +541,11 @@ void Calibration::AccNextStep()
 	{
 		//add current acceleration values to appropriate index of acc_cal array, also add readings to overall reading vector
 		//sensor already updates data in every iteration of the calibration loop so no need to add an update step here
-		ax.push_back(p_sensor->ax); ay.push_back(p_sensor->ay); az.push_back(p_sensor->az);
-		acc_cal[0][cal_stage - 2] += p_sensor->r_ax;
-		acc_cal[1][cal_stage - 2] += p_sensor->r_ay;
-		acc_cal[2][cal_stage - 2] += p_sensor->r_az;
+		//ax.push_back(p_sensor->ax); ay.push_back(p_sensor->ay); az.push_back(p_sensor->az); //should this be sensor raw data???
+		gx.push_back(p_sensor->GetData(0)); gy.push_back(p_sensor->GetData(1)); gz.push_back(p_sensor->GetData(2)); //testing out raw data to see if results are better
+		acc_cal[0][cal_stage - 2] += p_sensor->GetData(0);
+		acc_cal[1][cal_stage - 2] += p_sensor->GetData(1);
+		acc_cal[2][cal_stage - 2] += p_sensor->GetData(2);
 		avg_count++;
 
 		if (time_data.size() == 0) time_data.push_back(glfwGetTime() - data_time);
@@ -538,9 +650,9 @@ void Calibration::GyroNextStep()
 		}
 		else
 		{
-			//add current acceleration values to appropriate index of acc_cal array, also add readings to overall reading vector
+			//add current gyroscope values to appropriate index of gyr_cal array, also add readings to overall reading vector
 			//sensor already updates data in every iteration of the calibration loop so no need to add an update step here
-			gx.push_back(p_sensor->r_gx); gy.push_back(p_sensor->r_gy); gz.push_back(p_sensor->r_gz);
+			gx.push_back(p_sensor->GetData(3)); gy.push_back(p_sensor->GetData(4)); gz.push_back(p_sensor->GetData(5));
 
 			//record time stamps to potentially display graphs in the future
 			if (time_data.size() == 0) time_data.push_back(glfwGetTime() - data_time);
@@ -618,7 +730,7 @@ void Calibration::GyroNextStep()
 			else if (cal_stage == 5) p_graphics->AddText({ "Rotate toward you for: " + std::to_string(time_left) + " seconds", 10, 420, 0.5, {1.0, 1.0, 1.0} });
 			else if (cal_stage == 6) p_graphics->AddText({ "Rotate left for: " + std::to_string(time_left) + " seconds", 10, 420, 0.5, {1.0, 1.0, 1.0} });
 
-			gx.push_back(p_sensor->r_gx); gy.push_back(p_sensor->r_gy); gz.push_back(p_sensor->r_gz);
+			gx.push_back(p_sensor->GetData(3)); gy.push_back(p_sensor->GetData(4)); gz.push_back(p_sensor->GetData(5)); //push_back raw sensor data
 
 			//record time stamps so that data can be integrated
 			if (time_data.size() == 0) time_data.push_back(glfwGetTime() - data_time);
@@ -740,7 +852,7 @@ void Calibration::MagNextStep()
 			double time_left = 20 - (glfwGetTime() - cal_time);
 			p_graphics->AddText({ "Collecting Data for " + std::to_string(time_left) + " more seconds", 10, 420, 0.5, {1.0, 1.0, 1.0} });
 			//add current raw magnetometer values to magnetometer data vectors
-			mx.push_back(p_sensor->r_mx); my.push_back(p_sensor->r_my); mz.push_back(p_sensor->r_mz);
+			mx.push_back(p_sensor->GetData(6)); my.push_back(p_sensor->GetData(7)); mz.push_back(p_sensor->GetData(8));
 
 			//see if any new highs or lows are found
 			if (mx.back() > mag_max[0]) mag_max[0] = mx.back();
