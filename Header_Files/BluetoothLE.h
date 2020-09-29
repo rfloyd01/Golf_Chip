@@ -4,7 +4,7 @@
 #include <pplawait.h> //library for using the co_await command
 #include <chrono>
 
-#include "calibration.h"
+#include <Header_Files/calibration.h>
 
 using namespace winrt;
 using namespace Windows::Foundation;
@@ -23,7 +23,6 @@ public:
 	void DisplayLongUUID(guid yo);
 	void Connect();
 
-	std::vector<float> GetData();
 	volatile bool is_connected = false;
 	//had issues with this bool variable not updating. Apparently it had something to do with being read by multiple threads
 	//more on the subject can be found here https://stackoverflow.com/questions/25425130/loop-doesnt-see-value-changed-by-other-thread-without-a-print-statement
@@ -34,15 +33,20 @@ public:
 	void ToggleCalNumbers();
 
 	//Madgwick related functions
-	void Madgwick();
 	void Floyd();
+	void Madgwick();
+	void MadgwickModified();
 	void MadgwickIMU();
 	float invSqrt(float x);
 	glm::quat GetRotationQuaternion();
 	void SetSampleFrequency(float freq);
 	void SetMagField(float x, float y, float z);
 
+	//Data Passing Functions
+	float GetData(int index);
+	std::vector<float> GetData();
 	void GetLinearAcceleration();
+
 	void UpdatePosition();
 	void ResetPosition();
 
@@ -60,11 +64,12 @@ public:
 
 private:
 	float ConvertInt32toFloat(int32_t num);
-	float acc_conversion = 9.81 * 4.0 / 32768.0;
-	float gyr_conversion = 2000.0 / 32768.0;
-	float mag_conversion = 4.0 * 100.0 / 32768.0;
+	float acc_conversion = 9.80665 * 0.000488; //using conversion for 4G FXOS8700
+	float gyr_conversion = 0.015625; //using conversion for +/- 500deg/s FXAS21002C
+	float mag_conversion = 0.1; //using standard conversion for FXOS8700
 
 	double data_timer = glfwGetTime();
+	double connection_timer = glfwGetTime();
 
 	void SetUpDeviceWatcher();
 	concurrency::task<void> connectToBLEDevice(unsigned long long bluetoothAddress);
@@ -96,7 +101,7 @@ private:
 
 	//Madgwick items
 	float q0 = 1, q1 = 0, q2 = 0, q3 = 0;
-	float sampleFreq, beta = 0.035;
+	float sampleFreq, beta = 0.035; //beta changes how reliant the Madgwick filter is on acc and mag data, good value is 0.035
 	glm::quat q = glm::quat(q0, q2, q3, q1), qnew = glm::quat(1, 0, 0, 0);
 	int instability_fix = 1;
 	float bx, by, bz; //consider setting these values to value of current location by default
