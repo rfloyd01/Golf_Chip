@@ -66,19 +66,25 @@ void BLEDevice::UpdateData()
     
 
     //Updates raw data with calibration numbers and update ax, ay ,... mz variables
-    //normally the order should be ax, ay, az, however, the axis of sensors on chip are different than expected
-    //if there are errors look into swapping back to normal order
-    az = ((raw_sensor_data[0] - acc_off[0][0]) * acc_gain[0][0]) - ((acc_off[0][1] * abs(raw_sensor_data[1] / gravity)) + (acc_gain[0][1] * raw_sensor_data[1])) - ((acc_off[0][2] * abs(raw_sensor_data[2] / gravity)) + (acc_gain[0][2] * raw_sensor_data[2]));
-    ax = -((raw_sensor_data[1] - acc_off[1][1]) * acc_gain[1][1]) - ((acc_off[1][0] * abs(raw_sensor_data[0] / gravity)) + (acc_gain[1][0] * raw_sensor_data[0])) - ((acc_off[1][2] * abs(raw_sensor_data[2] / gravity)) + (acc_gain[1][2] * raw_sensor_data[2])); //chip y-axis is OpenGL -x-axis
-    ay = ((raw_sensor_data[2] - acc_off[2][2]) * acc_gain[2][2]) - ((acc_off[2][0] * abs(raw_sensor_data[0] / gravity)) + (acc_gain[2][0] * raw_sensor_data[0])) - ((acc_off[2][1] * abs(raw_sensor_data[1] / gravity)) + (acc_gain[2][1] * raw_sensor_data[1]));
+    //since the chip x, y and z axes are different than OpenGL's x, y and z axes some of the variables are swapped around
 
-    gz = (raw_sensor_data[3] - gyr_off[0]) * gyr_gain[0] * -1;
-    gx = (raw_sensor_data[4] - gyr_off[1]) * gyr_gain[1] * -1;
+    //chip ax = opengl -az, chip ay = opengl ax, chip az = opengl -ay
+    //The following acceleration numbers are used in a different calibration, revisit this in the future
+    //az = ((raw_sensor_data[0] - acc_off[0][0]) * acc_gain[0][0]) - ((acc_off[0][1] * abs(raw_sensor_data[1] / gravity)) + (acc_gain[0][1] * raw_sensor_data[1])) - ((acc_off[0][2] * abs(raw_sensor_data[2] / gravity)) + (acc_gain[0][2] * raw_sensor_data[2]));
+    //ax = ((raw_sensor_data[1] - acc_off[1][1]) * acc_gain[1][1]) - ((acc_off[1][0] * abs(raw_sensor_data[0] / gravity)) + (acc_gain[1][0] * raw_sensor_data[0])) - ((acc_off[1][2] * abs(raw_sensor_data[2] / gravity)) + (acc_gain[1][2] * raw_sensor_data[2])); //chip y-axis is OpenGL -x-axis
+    //ay = ((raw_sensor_data[2] - acc_off[2][2]) * acc_gain[2][2]) - ((acc_off[2][0] * abs(raw_sensor_data[0] / gravity)) + (acc_gain[2][0] * raw_sensor_data[0])) - ((acc_off[2][1] * abs(raw_sensor_data[1] / gravity)) + (acc_gain[2][1] * raw_sensor_data[1]));
+
+    az = (acc_gain[0][0] * (raw_sensor_data[0] - acc_off[0][0])) + (acc_gain[0][1] * (raw_sensor_data[1] - acc_off[1][1])) + (acc_gain[0][2] * (raw_sensor_data[2] - acc_off[2][2]));
+    ax = (acc_gain[1][0] * (raw_sensor_data[0] - acc_off[0][0])) + (acc_gain[1][1] * (raw_sensor_data[1] - acc_off[1][1])) + (acc_gain[1][2] * (raw_sensor_data[2] - acc_off[2][2]));
+    ay = (acc_gain[2][0] * (raw_sensor_data[0] - acc_off[0][0])) + (acc_gain[2][1] * (raw_sensor_data[1] - acc_off[1][1])) + (acc_gain[2][2] * (raw_sensor_data[2] - acc_off[2][2]));
+
+    gz = (raw_sensor_data[3] - gyr_off[0]) * gyr_gain[0];
+    gx = (raw_sensor_data[4] - gyr_off[1]) * gyr_gain[1];
     gy = (raw_sensor_data[5] - gyr_off[2]) * gyr_gain[2]; //the * -1 here is because OpenGL reads rotations in the opposite way as the FXOS does in this axis, i.e. clockwise = negative value vs. positive value
 
-    mz = -(raw_sensor_data[6] - mag_off[0]) * mag_gain[0]; //the negative sign is used here because the LSM9DS1 mag x-axis is reversed on the chip
+    mz = (raw_sensor_data[6] - mag_off[0]) * mag_gain[0]; //the negative sign is used here because the LSM9DS1 mag x-axis is reversed on the chip
     mx = (raw_sensor_data[7] - mag_off[1]) * mag_gain[1];
-    my = -(raw_sensor_data[8] - mag_off[2]) * mag_gain[2];
+    my = (raw_sensor_data[8] - mag_off[2]) * mag_gain[2];
 
     //Third thing, in original code there was a section where raw data could be saved in separate variables
     //not sure if this is actually needed or not
@@ -113,11 +119,14 @@ concurrency::task<void> BLEDevice::connectToBLEDevice(unsigned long long bluetoo
             characteristic.ValueChanged(Windows::Foundation::TypedEventHandler<GattCharacteristic, GattValueChangedEventArgs>([this](GattCharacteristic car, GattValueChangedEventArgs eventArgs)
                 {
                     float naynay = (float)std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - timer).count() / 1000000.0;
+                    float heyhey = glfwGetTime() - connection_timer;
+
                     timer = std::chrono::steady_clock::now(); //reset timer
+                    connection_timer = glfwGetTime();
 
                     time_average *= (float)cycle_count / (float)(cycle_count + 1);
                     cycle_count++;
-                    //std::cout << "Current time to read data is " << naynay << " milliseconds." << std::endl;
+                    std::cout << "Current time to read data is " << heyhey * 1000 << " milliseconds." << std::endl;
                     time_average += naynay / cycle_count;
 
                     //First thing is to record all of the raw data coming straight from the chip and put it into raw_data vector
@@ -195,6 +204,11 @@ std::vector<float> BLEDevice::GetData()
     return raw_sensor_data;
 }
 
+float BLEDevice::GetData(int index)
+{
+    return raw_sensor_data[index];
+}
+
 std::wstring BLEDevice::formatBluetoothAddress(unsigned long long BluetoothAddress)
 {
     std::wostringstream ret;
@@ -251,7 +265,7 @@ void BLEDevice::UpdateCalibrationNumbers()
 {
     int line_count = 0;
     std::fstream inFile;
-    inFile.open("Resources/calibration.txt");
+    inFile.open("C:/Users/Bobby/Documents/Coding/C++/BLE_33/BLE_33/Resources/calibration.txt");
     char name[256];
 
     while (!inFile.eof())
@@ -324,11 +338,131 @@ void BLEDevice::Madgwick()
 
     //convert Accelerometer readings to g, also create new variables
     ax_c = ax / 9.80665;
-    ay_c = ay / 9.80665;
-    az_c = az / 9.80665;
+    ay_c = az / 9.80665;
+    az_c = ay / 9.80665;
 
-    mx_c = -my;
-    my_c = -mx;
+    //Reference direction of Earth's magnetic field
+    //This is the original code, however, by not including Earth's magnetic field in the y-direction, OpenGL will rotate the image of the chip so that it alines with the Earth field
+    //i.e. the chip will always be skewed a little bit left or right when it is rendered
+    //before using magnetic values, rotate them from magnetic frame to Earth frame
+    glm::quat Qm = GetRotationQuaternion({ bx, by, bz }, { 1, 0, 0 });
+    std::vector<float> yoo = { mx, my, mz };
+    QuatRotate(Qm, yoo);
+    mx_c = yoo[0]; my_c = yoo[1]; mz_c = yoo[2];
+
+    // Use IMU algorithm if magnetometer measurement invalid (avoids NaN in magnetometer normalisation)
+    if ((mx == 0.0f) && (my == 0.0f) && (mz == 0.0f))
+    {
+        MadgwickIMU();
+        return;
+    }
+
+    // Rate of change of quaternion from gyroscope
+    qDot1 = 0.5f * (-q1 * gx_c - q2 * gy_c - q3 * gz_c);
+    qDot2 = 0.5f * (q0 * gx_c + q2 * gz_c - q3 * gy_c);
+    qDot3 = 0.5f * (q0 * gy_c - q1 * gz_c + q3 * gx_c);
+    qDot4 = 0.5f * (q0 * gz_c + q1 * gy_c - q2 * gx_c);
+
+    // Compute feedback only if accelerometer measurement valid (avoids NaN in accelerometer normalisation)
+    if (!((ax == 0.0f) && (ay == 0.0f) && (az == 0.0f))) {
+
+        // Normalise accelerometer measurement
+        recipNorm = invSqrt(ax_c * ax_c + ay_c * ay_c + az_c * az_c);
+        ax_c *= recipNorm;
+        ay_c *= recipNorm;
+        az_c *= recipNorm;
+
+        // Normalise magnetometer measurement
+        recipNorm = invSqrt(mx_c * mx_c + my_c * my_c + mz_c * mz_c);
+        mx_c *= recipNorm;
+        my_c *= recipNorm;
+        mz_c *= recipNorm;
+
+        // Auxiliary variables to avoid repeated arithmetic
+        _2q0mx = 2.0f * q0 * mx_c;
+        _2q0my = 2.0f * q0 * my_c;
+        _2q0mz = 2.0f * q0 * mz_c;
+        _2q1mx = 2.0f * q1 * mx_c;
+        _2q0 = 2.0f * q0;
+        _2q1 = 2.0f * q1;
+        _2q2 = 2.0f * q2;
+        _2q3 = 2.0f * q3;
+        _2q0q2 = 2.0f * q0 * q2;
+        _2q2q3 = 2.0f * q2 * q3;
+        q0q0 = q0 * q0;
+        q0q1 = q0 * q1;
+        q0q2 = q0 * q2;
+        q0q3 = q0 * q3;
+        q1q1 = q1 * q1;
+        q1q2 = q1 * q2;
+        q1q3 = q1 * q3;
+        q2q2 = q2 * q2;
+        q2q3 = q2 * q3;
+        q3q3 = q3 * q3;
+
+        hx = mx_c * q0q0 - _2q0my * q3 + _2q0mz * q2 + mx_c * q1q1 + _2q1 * my_c * q2 + _2q1 * mz_c * q3 - mx_c * q2q2 - mx_c * q3q3;
+        hy = _2q0mx * q3 + my_c * q0q0 - _2q0mz * q1 + _2q1mx * q2 - my_c * q1q1 + my_c * q2q2 + _2q2 * mz_c * q3 - my_c * q3q3;
+        _2bx = sqrt(hx * hx + hy * hy);
+        _2bz = -_2q0mx * q2 + _2q0my * q1 + mz_c * q0q0 + _2q1mx * q3 - mz_c * q1q1 + _2q2 * my_c * q3 - mz_c * q2q2 + mz_c * q3q3;
+        _4bx = 2.0f * _2bx;
+        _4bz = 2.0f * _2bz;
+
+        // Gradient decent algorithm corrective step
+        s0 = -_2q2 * (2.0f * q1q3 - _2q0q2 - ax_c) + _2q1 * (2.0f * q0q1 + _2q2q3 - ay_c) - _2bz * q2 * (_2bx * (0.5f - q2q2 - q3q3) + _2bz * (q1q3 - q0q2) - mx_c) + (-_2bx * q3 + _2bz * q1) * (_2bx * (q1q2 - q0q3) + _2bz * (q0q1 + q2q3) - my_c) + _2bx * q2 * (_2bx * (q0q2 + q1q3) + _2bz * (0.5f - q1q1 - q2q2) - mz_c);
+        s1 = _2q3 * (2.0f * q1q3 - _2q0q2 - ax_c) + _2q0 * (2.0f * q0q1 + _2q2q3 - ay_c) - 4.0f * q1 * (1 - 2.0f * q1q1 - 2.0f * q2q2 - az_c) + _2bz * q3 * (_2bx * (0.5f - q2q2 - q3q3) + _2bz * (q1q3 - q0q2) - mx_c) + (_2bx * q2 + _2bz * q0) * (_2bx * (q1q2 - q0q3) + _2bz * (q0q1 + q2q3) - my_c) + (_2bx * q3 - _4bz * q1) * (_2bx * (q0q2 + q1q3) + _2bz * (0.5f - q1q1 - q2q2) - mz_c);
+        s2 = -_2q0 * (2.0f * q1q3 - _2q0q2 - ax_c) + _2q3 * (2.0f * q0q1 + _2q2q3 - ay_c) - 4.0f * q2 * (1 - 2.0f * q1q1 - 2.0f * q2q2 - az_c) + (-_4bx * q2 - _2bz * q0) * (_2bx * (0.5f - q2q2 - q3q3) + _2bz * (q1q3 - q0q2) - mx_c) + (_2bx * q1 + _2bz * q3) * (_2bx * (q1q2 - q0q3) + _2bz * (q0q1 + q2q3) - my_c) + (_2bx * q0 - _4bz * q2) * (_2bx * (q0q2 + q1q3) + _2bz * (0.5f - q1q1 - q2q2) - mz_c);
+        s3 = _2q1 * (2.0f * q1q3 - _2q0q2 - ax_c) + _2q2 * (2.0f * q0q1 + _2q2q3 - ay_c) + (-_4bx * q3 + _2bz * q1) * (_2bx * (0.5f - q2q2 - q3q3) + _2bz * (q1q3 - q0q2) - mx_c) + (-_2bx * q0 + _2bz * q2) * (_2bx * (q1q2 - q0q3) + _2bz * (q0q1 + q2q3) - my_c) + _2bx * q1 * (_2bx * (q0q2 + q1q3) + _2bz * (0.5f - q1q1 - q2q2) - mz_c);
+
+        recipNorm = invSqrt(s0 * s0 + s1 * s1 + s2 * s2 + s3 * s3); // normalise step magnitude
+        s0 *= recipNorm;
+        s1 *= recipNorm;
+        s2 *= recipNorm;
+        s3 *= recipNorm;
+
+        // Apply feedback step
+        qDot1 -= beta * s0;
+        qDot2 -= beta * s1;
+        qDot3 -= beta * s2;
+        qDot4 -= beta * s3;
+    }
+
+    // Integrate rate of change of quaternion to yield quaternion
+    q0 += qDot1 * (1.0f / sampleFreq);
+    q1 += qDot2 * (1.0f / sampleFreq);
+    q2 += qDot3 * (1.0f / sampleFreq);
+    q3 += qDot4 * (1.0f / sampleFreq);
+
+    // Normalise quaternion
+    recipNorm = invSqrt(q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3);
+    q0 *= recipNorm;
+    q1 *= recipNorm;
+    q2 *= recipNorm;
+    q3 *= recipNorm;
+
+    q.w = q0; q.x = q1; q.y = q2; q.z = q3;
+}
+
+void BLEDevice::MadgwickModified()
+{
+    float recipNorm;
+    float s0, s1, s2, s3;
+    float qDot1, qDot2, qDot3, qDot4;
+    float hx, hy, hz;
+    float _2q0mx, _2q0my, _2q0mz, _2q1mx, _2bx, _2by, _2bz, _4bx, _4by, _4bz, _2q0, _2q1, _2q2, _2q3, _2q0q2, _2q2q3, q0q0, q0q1, q0q2, q0q3, q1q1, q1q2, q1q3, q2q2, q2q3, q3q3;
+
+    //convert Gyroscope readings to rad/s
+    gx_c = gx * 3.14159 / 180.0;
+    gy_c = gy * 3.14159 / 180.0;
+    gz_c = gz * 3.14159 / 180.0;
+
+    //convert Accelerometer readings to g, also create new variables
+    ax_c = ax / 9.80665;
+    ay_c = az / 9.80665;
+    az_c = ay / 9.80665;
+
+    //Reference direction of Earth's magnetic field
+    mx_c = mx;
+    my_c = my;
     mz_c = mz;
 
     // Use IMU algorithm if magnetometer measurement invalid (avoids NaN in magnetometer normalisation)
@@ -381,53 +515,20 @@ void BLEDevice::Madgwick()
         q2q3 = q2 * q3;
         q3q3 = q3 * q3;
 
-        //Reference direction of Earth's magnetic field
-        //This is the original code, however, by not including Earth's magnetic field in the y-direction, OpenGL will rotate the image of the chip so that it alines with the Earth field
-        //i.e. the chip will always be skewed a little bit left or right when it is rendered
-
-        //before using magnetic values, rotate them from magnetic frame to Earth frame
-        /*
-        glm::quat Qm = GetRotationQuaternion({ bx, by, bz }, { 0, 0, 1 });
-        std::vector<float> yoo = { mx, my, mx };
-        QuatRotate(Qm, yoo);
-        mx = yoo[0]; my = yoo[1]; mz = yoo[2];
-        */
-
-        hx = mx_c * q0q0 - _2q0my * q3 + _2q0mz * q2 + mx_c * q1q1 + _2q1 * my_c * q2 + _2q1 * mz_c * q3 - mx_c * q2q2 - mx_c * q3q3;
-        hy = _2q0mx * q3 + my_c * q0q0 - _2q0mz * q1 + _2q1mx * q2 - my_c * q1q1 + my_c * q2q2 + _2q2 * mz_c * q3 - my_c * q3q3;
-        _2bx = sqrt(hx * hx + hy * hy);
-        _2bz = -_2q0mx * q2 + _2q0my * q1 + mz_c * q0q0 + _2q1mx * q3 - mz_c * q1q1 + _2q2 * my_c * q3 - mz_c * q2q2 + mz_c * q3q3;
-        _4bx = 2.0f * _2bx;
-        _4bz = 2.0f * _2bz;
-
         //using hz and hx to calculate bz (horizontal component) and using hy for vertical component. Also, by and bz are actually multiplied by two, in the original code bx and bz weren't
-        /*
-        hx = mx * q0q0 - _2q0my * q3 + _2q0mz * q2 + mx * q1q1 + _2q1 * my * q2 + _2q1 * mz * q3 - mx * q2q2 - mx * q3q3;
-        hz = -_2q0mx * q2 + _2q0my * q1 + mz * q0q0 + _2q1mx * q3 - mz * q1q1 + _2q2 * my * q3 - mz * q2q2 + mz * q3q3;
-        _2by = 2 * (_2q0mx * q3 + my * q0q0 - _2q0mz * q1 + _2q1mx * q2 - my * q1q1 + my * q2q2 + _2q2 * mz * q3 - my * q3q3);
-        _2bz = 2 * sqrt(hx * hx + hz * hz);
-        _4by = 2.0f * _2by;
-        _4bz = 2.0f * _2bz;
-        */
+        //hx = mx_c * q0q0 - _2q0my * q3 + _2q0mz * q2 + mx_c * q1q1 + _2q1 * my_c * q2 + _2q1 * mz_c * q3 - mx_c * q2q2 - mx_c * q3q3;
+        //hz = -_2q0mx * q2 + _2q0my * q1 + mz_c * q0q0 + _2q1mx * q3 - mz_c * q1q1 + _2q2 * my_c * q3 - mz * q2q2 + mz_c * q3q3;
+        //_2by = 2 * (_2q0mx * q3 + my_c * q0q0 - _2q0mz * q1 + _2q1mx * q2 - my_c * q1q1 + my_c * q2q2 + _2q2 * mz_c * q3 - my_c * q3q3);
+        //_2bz = 2 * sqrt(hx * hx + hz * hz);
+        //_4by = 2.0f * _2by;
+        //_4bz = 2.0f * _2bz;
 
-        /*
-        _2bx = 2 * bx;
         _2by = 2 * by;
         _2bz = 2 * bz;
-        _4bx = 2.0f * _2bx;
-        _4by = 2.0f * _2by;
-        _4bz = 2.0f * _2bz;
-        */
-
-        std::cout << "Bx = " << _2bx / 2 << " , Bz = " << _2bz / 2 << std::endl;
+        _4by = 2 * _2by;
+        _4bz = 2 * _2bz;
 
         // Gradient decent algorithm corrective step
-        //Original code
-        s0 = -_2q2 * (2.0f * q1q3 - _2q0q2 - ax) + _2q1 * (2.0f * q0q1 + _2q2q3 - ay) - _2bz * q2 * (_2bx * (0.5f - q2q2 - q3q3) + _2bz * (q1q3 - q0q2) - mx) + (-_2bx * q3 + _2bz * q1) * (_2bx * (q1q2 - q0q3) + _2bz * (q0q1 + q2q3) - my) + _2bx * q2 * (_2bx * (q0q2 + q1q3) + _2bz * (0.5f - q1q1 - q2q2) - mz);
-        s1 = _2q3 * (2.0f * q1q3 - _2q0q2 - ax) + _2q0 * (2.0f * q0q1 + _2q2q3 - ay) - 4.0f * q1 * (1 - 2.0f * q1q1 - 2.0f * q2q2 - az) + _2bz * q3 * (_2bx * (0.5f - q2q2 - q3q3) + _2bz * (q1q3 - q0q2) - mx) + (_2bx * q2 + _2bz * q0) * (_2bx * (q1q2 - q0q3) + _2bz * (q0q1 + q2q3) - my);// +(_2bx * q3 - _4bz * q1) * (_2bx * (q0q2 + q1q3) + _2bz * (0.5f - q1q1 - q2q2) - mz);
-        s2 = -_2q0 * (2.0f * q1q3 - _2q0q2 - ax) + _2q3 * (2.0f * q0q1 + _2q2q3 - ay) - 4.0f * q2 * (1 - 2.0f * q1q1 - 2.0f * q2q2 - az) + (-_4bx * q2 - _2bz * q0) * (_2bx * (0.5f - q2q2 - q3q3) + _2bz * (q1q3 - q0q2) - mx) + (_2bx * q1 + _2bz * q3) * (_2bx * (q1q2 - q0q3) + _2bz * (q0q1 + q2q3) - my) + (_2bx * q0 - _4bz * q2) * (_2bx * (q0q2 + q1q3) + _2bz * (0.5f - q1q1 - q2q2) - mz);
-        s3 = _2q1 * (2.0f * q1q3 - _2q0q2 - ax) + _2q2 * (2.0f * q0q1 + _2q2q3 - ay) + (-_4bx * q3 + _2bz * q1) * (_2bx * (0.5f - q2q2 - q3q3) + _2bz * (q1q3 - q0q2) - mx) + (-_2bx * q0 + _2bz * q2) * (_2bx * (q1q2 - q0q3) + _2bz * (q0q1 + q2q3) - my) + _2bx * q1 * (_2bx * (q0q2 + q1q3) + _2bz * (0.5f - q1q1 - q2q2) - mz);
-
         //only 2 magnetic directions and calculations compensated for y-axis being vertical
         /*
         s0 = _2q3 * (2.0f * q0q3 + 2.0f * q1q2 - ax_c) - _2q1 * (2.0f * q2q3 - 2.0f * q0q1 - az_c) + (_2by * q3 - _2bz * q2) * (_2by * (q0q3 + q1q2) + _2bz * (q1q3 - q0q2) - mx) + _2bz * q1 * (_2by * (0.5f - q1q1 - q3q3) + _2bz * (q0q1 + q2q3) - my) - _2by * q1 * (_2by * (q2q3 - q0q1) + _2bz * (0.5f - q1q1 - q2q2) - mz);
@@ -437,12 +538,10 @@ void BLEDevice::Madgwick()
         */
 
         ///Gradient decent calculation with magnetic field included in all three directions
-        /*
         s0 = -_2q2 * (2.0f * q1q3 - _2q0q2 - ax_c) + _2q1 * (2.0f * q0q1 + _2q2q3 - ay_c) + (_2by * q3 - _2bz * q2) * (_2bx * (0.5f - q2q2 - q3q3) + _2by * (q0q3 + q1q2) + _2bz * (q1q3 - q0q2) - mx_c) + (-_2bx * q3 + _2bz * q1) * (_2bx * (q1q2 - q0q3) + _2by * (0.5f - q1q1 - q3q3) + _2bz * (q0q1 + q2q3) - my_c) + (_2bx * q2 - _2by * q1) * (_2bx * (q0q2 + q1q3) + _2by * (q2q3 - q0q2) + _2bz * (0.5f - q1q1 - q2q2) - mz_c);
         s1 = _2q3 * (2.0f * q1q3 - _2q0q2 - ax_c) + _2q0 * (2.0f * q0q1 + _2q2q3 - ay_c) - 4.0f * q1 * (1 - 2.0f * q1q1 - 2.0f * q2q2 - az_c) + (_2by * q2 + _2bz * q3) * (_2bx * (0.5f - q2q2 - q3q3) + _2by * (q0q3 + q1q2) + _2bz * (q1q3 - q0q2) - mx_c) + (_2bx * q2 - _4by * q1 + _2bz * q0) * (_2bx * (q1q2 - q0q3) + _2by * (0.5f - q1q1 - q3q3) + _2bz * (q0q1 + q2q3) - my_c) + (_2bx * q3 - _2by * q0 - _4bz * q1) * (_2bx * (q0q2 + q1q3) + _2by * (q2q3 - q0q2) + _2bz * (0.5f - q1q1 - q2q2) - mz_c);
         s2 = -_2q0 * (2.0f * q1q3 - _2q0q2 - ax_c) + _2q3 * (2.0f * q0q1 + _2q2q3 - ay_c) - 4.0f * q2 * (1 - 2.0f * q1q1 - 2.0f * q2q2 - az_c) + (-_4bx * q2 + _2by * q1 - _2bz * q0) * (_2bx * (0.5f - q2q2 - q3q3) + _2by * (q0q3 + q1q2) + _2bz * (q1q3 - q0q2) - mx_c) + (_2bx * q1 + _2bz * q3) * (_2bx * (q1q2 - q0q3) + _2by * (0.5f - q1q1 - q3q3) + _2bz * (q0q1 + q2q3) - my_c) + (_2bx * q0 + _2by * q3 - _4bz * q2) * (_2bx * (q0q2 + q1q3) + _2by * (q2q3 - q0q2) + _2bz * (0.5f - q1q1 - q2q2) - mz_c);
         s3 = _2q1 * (2.0f * q1q3 - _2q0q2 - ax_c) + _2q2 * (2.0f * q0q1 + _2q2q3 - ay_c) + (-_4bx * q3 + _2by * q0 + _2bz * q1) * (_2bx * (0.5f - q2q2 - q3q3) + _2by * (q0q3 + q1q2) + _2bz * (q1q3 - q0q2) - mx_c) + (-_2bx * q0 - _4by * q3 + _2bz * q2) * (_2bx * (q1q2 - q0q3) + _2by * (0.5f - q1q1 - q3q3) + _2bz * (q0q1 + q2q3) - my_c) + (_2bx * q1 + _2by * q2) * (_2bx * (q0q2 + q1q3) + _2by * (q2q3 - q0q2) + _2bz * (0.5f - q1q1 - q2q2) - mz_c);
-        */
 
         //Gradient decent calculation where Earth's gravity field is [0, 0, 1, 0] instead of [0, 0, 0, 1] (because in OpenGL gravity runs along the y-axis instead of the z-axis and mag field in all three directions
         /*
@@ -493,7 +592,7 @@ void BLEDevice::Floyd()
 
     //First, the current rotation quaternion is updated with Gyroscope information
     //Gyroscope readings are converted to radians/sec from deg/sec
-    gx_c = gx * 3.14159 / 180.0;
+    gx_c = -gx * 3.14159 / 180.0;
     gy_c = gy * 3.14159 / 180.0;
     gz_c = gz * 3.14159 / 180.0;
 
@@ -563,7 +662,7 @@ void BLEDevice::Floyd()
         Qa.z *= -1;
     }
 
-    float gamma = .035; //represents what percentage of the rotation quaternion comes from acc. + mag. data
+    float gamma = .0035; //represents what percentage of the rotation quaternion comes from acc. + mag. data
     q.w = (1 - gamma) * q0 + gamma * Qa.w;
     q.x = (1 - gamma) * q1 + gamma * Qa.x;
     q.y = (1 - gamma) * q2 + gamma * Qa.y;
