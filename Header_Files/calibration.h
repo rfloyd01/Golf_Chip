@@ -2,8 +2,8 @@
 
 #include <vector>
 
-#include "graphics.h"
-#include "BluetoothLE.h"
+#include <Header_Files/graphics.h>
+#include <Header_Files/BluetoothLE.h>
 
 class GL;
 class BLEDevice;
@@ -40,6 +40,7 @@ private:
 	void UpdateCalibrationNumbers(); //this function changes the values of the cal numbers saved in this class
 	void SetCalibrationNumbers();    //this function updates the text file Calibration.txt so the rest of the program will have the new cal numbers
 	void LiveUpdate();
+	void invertAccMatrix();
 
 	//functions for individual tests
 	void AccTest();
@@ -55,6 +56,8 @@ private:
 	std::vector<float> gx, gy, gz; //vectors to hold gyroscope cal. data
 	std::vector<float> mx, my, mz; //vectors to hold gyroscope cal. data
 	std::vector<float> time_data;
+
+	glm::quat calibration_q = { 1, 0, 0, 0 }; //a quaternion used to render sensor in current phase of calibration
 
 	bool record_data = 0, can_press_key = 0, mode_select = 0, collecting = 0, live_data = 0; //can_press_key will disable keyboard presses momentarily after a key is pressed, to make sure the same key isn't pressed multiple times in one go
 	bool changes_made = 0; //if any calibration numbers were changed this is set to 1 so the code knows to update Calibration.txt
