@@ -32,7 +32,7 @@ int main()
 {
     init_apartment();
 
-    float frame_limit = 200;
+    float frame_limit = 60;
     BLEDevice BLE_Nano(serviceUUID, frame_limit);
     BLE_Nano.Connect();
 
@@ -65,10 +65,10 @@ int main()
 
     //Disable V-Sync so that frames aren't limited by display
     glfwSwapInterval(0);
+    double frame_timer = glfwGetTime(), loop_timer = glfwGetTime();
 
     while (!GraphicWindow.ShouldClose())
     {
-        double yooo = glfwGetTime();
         GraphicWindow.processInput();
 
         //check to see if sensor location needs to be reset
@@ -80,9 +80,11 @@ int main()
 
         //Get current data from chip and update rotation quaternion
         BLE_Nano.UpdateData();
-        //LSM9DS1.Madgwick();
-        BLE_Nano.Floyd();
-        BLE_Nano.UpdatePosition();
+        BLE_Nano.SetSampleFrequency(1.0 / (glfwGetTime() - loop_timer)); loop_timer = glfwGetTime(); //need to set the sample frequency every loop to get real time measurements
+        BLE_Nano.Madgwick();
+        //BLE_Nano.MadgwickModified();
+        //BLE_Nano.Floyd();
+        //BLE_Nano.UpdatePosition();
 
         if (GraphicWindow.record_data == 1) AddData(GraphicWindow, BLE_Nano);
         if (GraphicWindow.display_graph == 1)
@@ -95,12 +97,15 @@ int main()
 
         if (GraphicWindow.display_readings) GraphicWindow.LiveUpdate(BLE_Nano.ax, BLE_Nano.ay, BLE_Nano.az, BLE_Nano.gx, BLE_Nano.gy, BLE_Nano.gz, BLE_Nano.mx, BLE_Nano.my, BLE_Nano.mz, BLE_Nano.lin_ax, BLE_Nano.lin_ay, BLE_Nano.lin_az, BLE_Nano.vel_x, BLE_Nano.vel_y, BLE_Nano.vel_z, BLE_Nano.loc_x, BLE_Nano.loc_y, BLE_Nano.loc_z);
 
-        GraphicWindow.SetClubMatrices({ 1.0, 1.0, 1.0 }, { BLE_Nano.loc_x, BLE_Nano.loc_y, BLE_Nano.loc_z });
-        GraphicWindow.RenderClub(BLE_Nano.GetRotationQuaternion());
-        GraphicWindow.RenderText();
-        GraphicWindow.Swap();
-
-        while (glfwGetTime() - yooo < (1.0 / frame_limit)) continue;
+        //if (glfwGetTime() - frame_timer < (1.0 / frame_limit))
+        if (1)
+        {
+            GraphicWindow.SetClubMatrices({ 1.0, 1.0, 1.0 }, { BLE_Nano.loc_x, BLE_Nano.loc_y, BLE_Nano.loc_z });
+            GraphicWindow.RenderClub(BLE_Nano.GetRotationQuaternion());
+            GraphicWindow.RenderText();
+            GraphicWindow.Swap();
+            frame_timer = glfwGetTime();
+        }
     }
 
     GraphicWindow.DeleteBuffers();
