@@ -24,6 +24,7 @@ public:
 	void Connect();
 
 	volatile bool is_connected = false;
+	volatile bool new_data = false;
 	//had issues with this bool variable not updating. Apparently it had something to do with being read by multiple threads
 	//more on the subject can be found here https://stackoverflow.com/questions/25425130/loop-doesnt-see-value-changed-by-other-thread-without-a-print-statement
 
@@ -33,14 +34,14 @@ public:
 	void ToggleCalNumbers();
 
 	//Madgwick related functions
-	void Floyd();
 	void Madgwick();
 	void MadgwickModified();
+	void Floyd();
 	void MadgwickIMU();
 	float invSqrt(float x);
 	glm::quat GetRotationQuaternion();
 	void SetSampleFrequency(float freq);
-	void SetMagField(float x, float y, float z);
+	void SetMagField();
 
 	//Data Passing Functions
 	float GetData(int index);
@@ -52,9 +53,14 @@ public:
 
 	void SetPositionTimer();
 
-	float ax, ay, az, r_ax, r_ay, r_az; //TODO: Do I need separate variables for raw data? I don't think so
-	float gx, gy, gz, r_gx, r_gy, r_gz;
-	float mx, my, mz, r_mx, r_my, r_mz;
+	const int number_of_samples = 10; //how many sensor samples are store in the BLE characteristic at a given time
+	//TODO: Look into a good way to read this value from the phyiscal BLE device
+	int current_sample = 0; //when updating rotation quaternion with Madgwick filter, need to know which data point is currently being looked at
+
+	//vectors to store calibrated sensor data
+	std::vector<float> ax, ay, az;
+	std::vector<float> gx, gy, gz;
+	std::vector<float> mx, my, mz;
 	double temperature; //not currently using temperature but should consider it
 
 	//position data
@@ -68,22 +74,15 @@ private:
 	float gyr_conversion = 0.015625; //using conversion for +/- 500deg/s FXAS21002C
 	float mag_conversion = 0.1; //using standard conversion for FXOS8700
 
-	double data_timer = glfwGetTime();
-	double connection_timer = glfwGetTime();
-
 	void SetUpDeviceWatcher();
 	concurrency::task<void> connectToBLEDevice(unsigned long long bluetoothAddress);
 
 	guid service_UUID, characteristic_UUID;
 	unsigned long long address;
-	float time_average = 0;
-	int cycle_count = 0;
-	std::vector<float> raw_sensor_data = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+	std::vector<float> raw_sensor_data; //holds all raw data that comes in from the sensor
 
 	std::wstring formatBluetoothAddress(unsigned long long BluetoothAddress);
-	std::chrono::steady_clock::time_point timer;
 
-	double position_timer, end_timer;
 	float gravity = 9.80665;
 	float lin_acc_threshold = 0.025; //linear acceleration will be set to zero unless it exceeds this threshold. This will help with location drift with time. This number was obtained experimentally as most white noise falls within +/- .025 of actual readings
 	float movement_scale = 1; //This number is to make sure that distance traveled looks accurate relative to how far sensor is from the camera
@@ -98,6 +97,14 @@ private:
 	float mx_c, my_c, mz_c; //create copy variables so Madgwick filter doesn't alter original values from sensor
 
 	glm::quat g_to_m, m_to_g; //quaternion that rotates the gravity frame to magnetic frame
+
+	//Timing Variables
+	double position_timer, end_timer;
+	float time_average = 0;
+	int cycle_count = 0;
+	double data_timer = glfwGetTime();
+	double Madgwick_timer;
+	std::chrono::steady_clock::time_point timer;
 
 	//Madgwick items
 	float q0 = 1, q1 = 0, q2 = 0, q3 = 0;
