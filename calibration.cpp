@@ -71,9 +71,9 @@ void Calibration::LiveUpdate()
 {
 	if (live_data)
 	{
-		p_graphics->EditText(0, "Ax = " + std::to_string(p_sensor->ax) + " m/s^2");
-		p_graphics->EditText(1, "Ay = " + std::to_string(p_sensor->ay) + " m/s^2");
-		p_graphics->EditText(2, "Az = " + std::to_string(p_sensor->az) + " m/s^2");
+		p_graphics->EditText(0, "Ax = " + std::to_string(p_sensor->ax[p_sensor->current_sample]) + " m/s^2");
+		p_graphics->EditText(1, "Ay = " + std::to_string(p_sensor->ay[p_sensor->current_sample]) + " m/s^2");
+		p_graphics->EditText(2, "Az = " + std::to_string(p_sensor->az[p_sensor->current_sample]) + " m/s^2");
 	}
 }
 
@@ -345,9 +345,9 @@ void Calibration::processInput()
 			{
 				if (!live_data)
 				{
-					p_graphics->InsertText(0, { "Ax = " + std::to_string(p_sensor->ax) + " m/s^2", 550.0, 70.0, 0.33, {1.0, 0.0, 0.0} });
-					p_graphics->InsertText(0, { "Ay = " + std::to_string(p_sensor->ay) + " m/s^2", 550.0, 50.0, 0.33, {0.0, 1.0, 0.0} });
-					p_graphics->InsertText(0, { "Az = " + std::to_string(p_sensor->az) + " m/s^2", 550.0, 30.0, 0.33, {0.0, 0.0, 1.0} });
+					p_graphics->InsertText(0, { "Ax = " + std::to_string(p_sensor->ax[p_sensor->current_sample]) + " m/s^2", 550.0, 70.0, 0.33, {1.0, 0.0, 0.0} });
+					p_graphics->InsertText(0, { "Ay = " + std::to_string(p_sensor->ay[p_sensor->current_sample]) + " m/s^2", 550.0, 50.0, 0.33, {0.0, 1.0, 0.0} });
+					p_graphics->InsertText(0, { "Az = " + std::to_string(p_sensor->az[p_sensor->current_sample]) + " m/s^2", 550.0, 30.0, 0.33, {0.0, 0.0, 1.0} });
 					live_data = 1;
 				}
 				else
