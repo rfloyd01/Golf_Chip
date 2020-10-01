@@ -16,6 +16,18 @@ BLEDevice::BLEDevice(guid ServiceUUID, float freq)
 {
     service_UUID = ServiceUUID;
     sampleFreq = freq;
+
+    for (int i = 0; i < number_of_samples; i++)
+    {
+        //Initialize vectors that hold calibrated and raw sensor data to 0
+        //TODO: Replace this with a create zero vector function at some point
+        ax.push_back(0); ay.push_back(0); az.push_back(0);
+        gx.push_back(0); gy.push_back(0); gz.push_back(0);
+        mx.push_back(0); my.push_back(0); mz.push_back(0);
+        raw_sensor_data.push_back(0); raw_sensor_data.push_back(0); raw_sensor_data.push_back(0);
+        raw_sensor_data.push_back(0); raw_sensor_data.push_back(0); raw_sensor_data.push_back(0);
+        raw_sensor_data.push_back(0); raw_sensor_data.push_back(0); raw_sensor_data.push_back(0);
+    }
 }
 
 void BLEDevice::Connect()
@@ -63,10 +75,9 @@ void BLEDevice::SetUpDeviceWatcher()
 
 void BLEDevice::UpdateData()
 {
-    
-
     //Updates raw data with calibration numbers and update ax, ay ,... mz variables
     //since the chip x, y and z axes are different than OpenGL's x, y and z axes some of the variables are swapped around
+    //The count variable counts which data point should be used as multiple data points are taken from the sensor at a time
 
     //chip ax = opengl -az, chip ay = opengl ax, chip az = opengl -ay
     //The following acceleration numbers are used in a different calibration, revisit this in the future
@@ -74,20 +85,23 @@ void BLEDevice::UpdateData()
     //ax = ((raw_sensor_data[1] - acc_off[1][1]) * acc_gain[1][1]) - ((acc_off[1][0] * abs(raw_sensor_data[0] / gravity)) + (acc_gain[1][0] * raw_sensor_data[0])) - ((acc_off[1][2] * abs(raw_sensor_data[2] / gravity)) + (acc_gain[1][2] * raw_sensor_data[2])); //chip y-axis is OpenGL -x-axis
     //ay = ((raw_sensor_data[2] - acc_off[2][2]) * acc_gain[2][2]) - ((acc_off[2][0] * abs(raw_sensor_data[0] / gravity)) + (acc_gain[2][0] * raw_sensor_data[0])) - ((acc_off[2][1] * abs(raw_sensor_data[1] / gravity)) + (acc_gain[2][1] * raw_sensor_data[1]));
 
-    az = (acc_gain[0][0] * (raw_sensor_data[0] - acc_off[0][0])) + (acc_gain[0][1] * (raw_sensor_data[1] - acc_off[1][1])) + (acc_gain[0][2] * (raw_sensor_data[2] - acc_off[2][2]));
-    ax = (acc_gain[1][0] * (raw_sensor_data[0] - acc_off[0][0])) + (acc_gain[1][1] * (raw_sensor_data[1] - acc_off[1][1])) + (acc_gain[1][2] * (raw_sensor_data[2] - acc_off[2][2]));
-    ay = (acc_gain[2][0] * (raw_sensor_data[0] - acc_off[0][0])) + (acc_gain[2][1] * (raw_sensor_data[1] - acc_off[1][1])) + (acc_gain[2][2] * (raw_sensor_data[2] - acc_off[2][2]));
+    for (int i = 0; i < number_of_samples; i++)
+    {
+        az[i] = (acc_gain[0][0] * (raw_sensor_data[0 + 9 * i] - acc_off[0][0])) + (acc_gain[0][1] * (raw_sensor_data[1 + 9 * i] - acc_off[1][1])) + (acc_gain[0][2] * (raw_sensor_data[2 + 9 * i] - acc_off[2][2]));
+        ax[i] = (acc_gain[1][0] * (raw_sensor_data[0 + 9 * i] - acc_off[0][0])) + (acc_gain[1][1] * (raw_sensor_data[1 + 9 * i] - acc_off[1][1])) + (acc_gain[1][2] * (raw_sensor_data[2 + 9 * i] - acc_off[2][2]));
+        ay[i] = (acc_gain[2][0] * (raw_sensor_data[0 + 9 * i] - acc_off[0][0])) + (acc_gain[2][1] * (raw_sensor_data[1 + 9 * i] - acc_off[1][1])) + (acc_gain[2][2] * (raw_sensor_data[2 + 9 * i] - acc_off[2][2]));
 
-    gz = (raw_sensor_data[3] - gyr_off[0]) * gyr_gain[0];
-    gx = (raw_sensor_data[4] - gyr_off[1]) * gyr_gain[1];
-    gy = (raw_sensor_data[5] - gyr_off[2]) * gyr_gain[2]; //the * -1 here is because OpenGL reads rotations in the opposite way as the FXOS does in this axis, i.e. clockwise = negative value vs. positive value
+        gz[i] = (raw_sensor_data[3 + 9 * i] - gyr_off[0]) * gyr_gain[0];
+        gx[i] = (raw_sensor_data[4 + 9 * i] - gyr_off[1]) * gyr_gain[1];
+        gy[i] = (raw_sensor_data[5 + 9 * i] - gyr_off[2]) * gyr_gain[2]; //the * -1 here is because OpenGL reads rotations in the opposite way as the FXOS does in this axis, i.e. clockwise = negative value vs. positive value
 
-    mz = (raw_sensor_data[6] - mag_off[0]) * mag_gain[0]; //the negative sign is used here because the LSM9DS1 mag x-axis is reversed on the chip
-    mx = (raw_sensor_data[7] - mag_off[1]) * mag_gain[1];
-    my = (raw_sensor_data[8] - mag_off[2]) * mag_gain[2];
+        mz[i] = (raw_sensor_data[6 + 9 * i] - mag_off[0]) * mag_gain[0]; //the negative sign is used here because the LSM9DS1 mag x-axis is reversed on the chip
+        mx[i] = (raw_sensor_data[7 + 9 * i] - mag_off[1]) * mag_gain[1];
+        my[i] = (raw_sensor_data[8 + 9 * i] - mag_off[2]) * mag_gain[2];
+    }
 
-    //Third thing, in original code there was a section where raw data could be saved in separate variables
-    //not sure if this is actually needed or not
+    current_sample = 0; //since a new set of data has come in, start from the beginning of it when doing Madgwick filter
+    new_data = false; //set new_data to false so the sensor data doesn't get updated until more is read from the BLE device
 }
 
 concurrency::task<void> BLEDevice::connectToBLEDevice(unsigned long long bluetoothAddress)
@@ -119,14 +133,13 @@ concurrency::task<void> BLEDevice::connectToBLEDevice(unsigned long long bluetoo
             characteristic.ValueChanged(Windows::Foundation::TypedEventHandler<GattCharacteristic, GattValueChangedEventArgs>([this](GattCharacteristic car, GattValueChangedEventArgs eventArgs)
                 {
                     float naynay = (float)std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - timer).count() / 1000000.0;
-                    float heyhey = glfwGetTime() - connection_timer;
 
                     timer = std::chrono::steady_clock::now(); //reset timer
-                    connection_timer = glfwGetTime();
 
                     time_average *= (float)cycle_count / (float)(cycle_count + 1);
                     cycle_count++;
-                    std::cout << "Current time to read data is " << heyhey * 1000 << " milliseconds." << std::endl;
+                    //std::cout << "Current time to read data is " << heyhey * 1000 << " milliseconds." << std::endl;
+
                     time_average += naynay / cycle_count;
 
                     //First thing is to record all of the raw data coming straight from the chip and put it into raw_data vector
@@ -135,41 +148,35 @@ concurrency::task<void> BLEDevice::connectToBLEDevice(unsigned long long bluetoo
                     //reader.ByteOrder(Windows::Storage::Streams::ByteOrder::BigEndian); //BLE uses little Endian which is annoying so switch it
 
                     //First read acceleration data
-                    for (int i = 0; i < 3; i++)
+                    for (int i = 0; i < number_of_samples; i++)
                     {
-                        int16_t ayyy = ((read.ReadByte()) | (read.ReadByte() << 8));
-                        raw_sensor_data[i] = ayyy * acc_conversion;
+                        for (int j = 0; j < 3; j++)
+                        {
+                            int16_t ayyy = ((read.ReadByte()) | (read.ReadByte() << 8));
+                            raw_sensor_data[j + 9 * i] = ayyy * acc_conversion;
+                        }
 
-                        //if (i == 0) std::cout << "Ax = " << ayyy * acc_conversion << std::endl;
-                        //if (i == 1) std::cout << "Ay = " << ayyy * acc_conversion << std::endl;
-                        //if (i == 2) std::cout << "Az = " << ayyy * acc_conversion << std::endl;
+                        //Second is gyroscope data
+                        for (int j = 0; j < 3; j++)
+                        {
+                            int16_t ayyy = ((read.ReadByte()) | (read.ReadByte() << 8));
+                            raw_sensor_data[j + 3 + 9 * i] = ayyy * gyr_conversion;
+
+                            //if (i == 0) std::cout << "Gx = " << ayyy * gyr_conversion << std::endl;
+                            //if (i == 1) std::cout << "Gy = " << ayyy * gyr_conversion << std::endl;
+                            //if (i == 2) std::cout << "Gz = " << ayyy * gyr_conversion << std::endl;
+                        }
+
+                        //Third is magnet data
+                        for (int j = 0; j < 3; j++)
+                        {
+                            int16_t ayyy = ((read.ReadByte()) | (read.ReadByte() << 8));
+                            raw_sensor_data[j + 6 + 9 * i] = ayyy * mag_conversion;
+                        }
                     }
 
-                    //Second is gyroscope data
-                    for (int i = 0; i < 3; i++)
-                    {
-                        int16_t ayyy = ((read.ReadByte()) | (read.ReadByte() << 8));
-                        raw_sensor_data[i + 3] = ayyy * gyr_conversion;
-
-                        //if (i == 0) std::cout << "Gx = " << ayyy * gyr_conversion << std::endl;
-                        //if (i == 1) std::cout << "Gy = " << ayyy * gyr_conversion << std::endl;
-                        //if (i == 2) std::cout << "Gz = " << ayyy * gyr_conversion << std::endl;
-                    }
-
-                    //Third is magnet data
-                    for (int i = 0; i < 3; i++)
-                    {
-                        int16_t ayyy = ((read.ReadByte()) | (read.ReadByte() << 8));
-                        raw_sensor_data[i + 6] = ayyy * mag_conversion;
-
-                        //if (i == 0) std::cout << "Mx = " << ayyy * mag_conversion << std::endl;
-                        //if (i == 1) std::cout << "My = " << ayyy * mag_conversion << std::endl;
-                        //if (i == 2) std::cout << "Mz = " << ayyy * mag_conversion << std::endl;
-                    }
-                    //std::cout << std::endl;
                     UpdateData(); //applies calibration information to raw data
-
-                    //std::cout << "Average time to read data so far is " << time_average << " milliseconds." << std::endl;
+                    //new_data = true; //by setting this value to true, calibration info will be applied to raw data in main loop of program
                 }));
         }
         else std::cout << "Was not able to properly set up notification event handling." << std::endl;
@@ -332,26 +339,26 @@ void BLEDevice::Madgwick()
     float _2q0mx, _2q0my, _2q0mz, _2q1mx, _2bx, _2by, _2bz, _4bx, _4by, _4bz, _2q0, _2q1, _2q2, _2q3, _2q0q2, _2q2q3, q0q0, q0q1, q0q2, q0q3, q1q1, q1q2, q1q3, q2q2, q2q3, q3q3;
 
     //convert Gyroscope readings to rad/s
-    gx_c = gx * 3.14159 / 180.0;
-    gy_c = gy * 3.14159 / 180.0;
-    gz_c = gz * 3.14159 / 180.0;
+    gx_c = gx[current_sample] * 3.14159 / 180.0;
+    gy_c = gy[current_sample] * 3.14159 / 180.0;
+    gz_c = gz[current_sample] * 3.14159 / 180.0;
 
     //convert Accelerometer readings to g, also create new variables
-    ax_c = ax / 9.80665;
-    ay_c = az / 9.80665;
-    az_c = ay / 9.80665;
+    ax_c = ax[current_sample] / 9.80665;
+    ay_c = az[current_sample] / 9.80665;
+    az_c = ay[current_sample] / 9.80665;
 
     //Reference direction of Earth's magnetic field
     //This is the original code, however, by not including Earth's magnetic field in the y-direction, OpenGL will rotate the image of the chip so that it alines with the Earth field
     //i.e. the chip will always be skewed a little bit left or right when it is rendered
     //before using magnetic values, rotate them from magnetic frame to Earth frame
     glm::quat Qm = GetRotationQuaternion({ bx, by, bz }, { 1, 0, 0 });
-    std::vector<float> yoo = { mx, my, mz };
+    std::vector<float> yoo = { mx[current_sample], my[current_sample], mz[current_sample] };
     QuatRotate(Qm, yoo);
     mx_c = yoo[0]; my_c = yoo[1]; mz_c = yoo[2];
 
     // Use IMU algorithm if magnetometer measurement invalid (avoids NaN in magnetometer normalisation)
-    if ((mx == 0.0f) && (my == 0.0f) && (mz == 0.0f))
+    if ((mx[current_sample] == 0.0f) && (my[current_sample] == 0.0f) && (mz[current_sample] == 0.0f))
     {
         MadgwickIMU();
         return;
@@ -364,7 +371,7 @@ void BLEDevice::Madgwick()
     qDot4 = 0.5f * (q0 * gz_c + q1 * gy_c - q2 * gx_c);
 
     // Compute feedback only if accelerometer measurement valid (avoids NaN in accelerometer normalisation)
-    if (!((ax == 0.0f) && (ay == 0.0f) && (az == 0.0f))) {
+    if (!((ax[current_sample] == 0.0f) && (ay[current_sample] == 0.0f) && (az[current_sample] == 0.0f))) {
 
         // Normalise accelerometer measurement
         recipNorm = invSqrt(ax_c * ax_c + ay_c * ay_c + az_c * az_c);
@@ -440,6 +447,8 @@ void BLEDevice::Madgwick()
     q3 *= recipNorm;
 
     q.w = q0; q.x = q1; q.y = q2; q.z = q3;
+
+    if (current_sample < number_of_samples - 1) current_sample++; //if the end of current data set has been reached and there's no new data, keep applying filter on last piece of data
 }
 
 void BLEDevice::MadgwickModified()
@@ -451,22 +460,22 @@ void BLEDevice::MadgwickModified()
     float _2q0mx, _2q0my, _2q0mz, _2q1mx, _2bx, _2by, _2bz, _4bx, _4by, _4bz, _2q0, _2q1, _2q2, _2q3, _2q0q2, _2q2q3, q0q0, q0q1, q0q2, q0q3, q1q1, q1q2, q1q3, q2q2, q2q3, q3q3;
 
     //convert Gyroscope readings to rad/s
-    gx_c = gx * 3.14159 / 180.0;
-    gy_c = gy * 3.14159 / 180.0;
-    gz_c = gz * 3.14159 / 180.0;
+    gx_c = gx[current_sample] * 3.14159 / 180.0;
+    gy_c = gy[current_sample] * 3.14159 / 180.0;
+    gz_c = gz[current_sample] * 3.14159 / 180.0;
 
     //convert Accelerometer readings to g, also create new variables
-    ax_c = ax / 9.80665;
-    ay_c = az / 9.80665;
-    az_c = ay / 9.80665;
+    ax_c = ax[current_sample] / 9.80665;
+    ay_c = az[current_sample] / 9.80665;
+    az_c = ay[current_sample] / 9.80665;
 
     //Reference direction of Earth's magnetic field
-    mx_c = mx;
-    my_c = my;
-    mz_c = mz;
+    mx_c = mx[current_sample];
+    my_c = my[current_sample];
+    mz_c = mz[current_sample];
 
     // Use IMU algorithm if magnetometer measurement invalid (avoids NaN in magnetometer normalisation)
-    if ((mx == 0.0f) && (my == 0.0f) && (mz == 0.0f))
+    if ((mx[current_sample] == 0.0f) && (my[current_sample] == 0.0f) && (mz[current_sample] == 0.0f))
     {
         MadgwickIMU();
         return;
@@ -479,7 +488,7 @@ void BLEDevice::MadgwickModified()
     qDot4 = 0.5f * (q0 * gz_c + q1 * gy_c - q2 * gx_c);
 
     // Compute feedback only if accelerometer measurement valid (avoids NaN in accelerometer normalisation)
-    if (!((ax == 0.0f) && (ay == 0.0f) && (az == 0.0f))) {
+    if (!((ax[current_sample] == 0.0f) && (ay[current_sample] == 0.0f) && (az[current_sample] == 0.0f))) {
 
         // Normalise accelerometer measurement
         recipNorm = invSqrt(ax_c * ax_c + ay_c * ay_c + az_c * az_c);
@@ -578,6 +587,7 @@ void BLEDevice::MadgwickModified()
     q3 *= recipNorm;
 
     q.w = q0; q.x = q1; q.y = q2; q.z = q3;
+    if (current_sample < number_of_samples - 1) current_sample++; //if the end of current data set has been reached and there's no new data, keep applying filter on last piece of data
 }
 
 void BLEDevice::Floyd()
@@ -587,14 +597,14 @@ void BLEDevice::Floyd()
 
     std::vector<float> a_base = { 0, 1, 0 };
     std::vector<float> mag_base = { bx, by, bz };
-    std::vector<float> a_reading = { ax / gravity, ay / gravity, az / gravity };
-    std::vector<float> mag_reading = { mx, my, mz };
+    std::vector<float> a_reading = { ax[current_sample] / gravity, ay[current_sample] / gravity, az[current_sample] / gravity };
+    std::vector<float> mag_reading = { mx[current_sample], my[current_sample], mz[current_sample] };
 
     //First, the current rotation quaternion is updated with Gyroscope information
     //Gyroscope readings are converted to radians/sec from deg/sec
-    gx_c = -gx * 3.14159 / 180.0;
-    gy_c = gy * 3.14159 / 180.0;
-    gz_c = gz * 3.14159 / 180.0;
+    gx_c = -gx[current_sample] * 3.14159 / 180.0;
+    gy_c = gy[current_sample] * 3.14159 / 180.0;
+    gz_c = gz[current_sample] * 3.14159 / 180.0;
 
     qDot1 = 0.5f * (-q1 * gx_c - q2 * gy_c - q3 * gz_c);
     qDot2 = 0.5f * (q0 * gx_c + q2 * gz_c - q3 * gy_c);
@@ -680,6 +690,8 @@ void BLEDevice::Floyd()
     q1 = q.x;
     q2 = q.y;
     q3 = q.z;
+
+    if (current_sample < number_of_samples - 1) current_sample++; //if the end of current data set has been reached and there's no new data, keep applying filter on last piece of data
 }
 
 void BLEDevice::MadgwickIMU()
@@ -690,14 +702,14 @@ void BLEDevice::MadgwickIMU()
     float _2q0, _2q1, _2q2, _2q3, _4q0, _4q1, _4q2, _8q1, _8q2, q0q0, q1q1, q2q2, q3q3;
 
     //convert Gyroscope readings to rad/s
-    gx_c = gx * 3.14159 / 180.0;
-    gy_c = gy * 3.14159 / 180.0;
-    gz_c = gz * 3.14159 / 180.0;
+    gx_c = gx[current_sample] * 3.14159 / 180.0;
+    gy_c = gy[current_sample] * 3.14159 / 180.0;
+    gz_c = gz[current_sample] * 3.14159 / 180.0;
 
     //convert Accelerometer readings to g, also create new variables
-    ax_c = ax;
-    ay_c = az;
-    az_c = ay;
+    ax_c = ax[current_sample];
+    ay_c = az[current_sample];
+    az_c = ay[current_sample];
 
     // Rate of change of quaternion from gyroscope
     qDot1 = 0.5f * (-q1 * gx_c - q2 * gy_c - q3 * gz_c);
@@ -706,10 +718,10 @@ void BLEDevice::MadgwickIMU()
     qDot4 = 0.5f * (q0 * gz_c + q1 * gy_c - q2 * gx_c);
 
     // Compute feedback only if accelerometer measurement valid (avoids NaN in accelerometer normalisation)
-    if (!((ax == 0.0f) && (ay == 0.0f) && (az == 0.0f))) {
+    if (!((ax[current_sample] == 0.0f) && (ay[current_sample] == 0.0f) && (az[current_sample] == 0.0f))) {
 
         // Normalise accelerometer measurement
-        recipNorm = invSqrt(ax * ax + ay * ay + az * az);
+        recipNorm = invSqrt(ax_c * ax_c + ay_c * ay_c + az_c * az_c);
         ax_c *= recipNorm;
         ay_c *= recipNorm;
         az_c *= recipNorm;
@@ -761,6 +773,8 @@ void BLEDevice::MadgwickIMU()
     q3 *= recipNorm;
 
     q.w = q0; q.x = q1; q.y = q2; q.z = q3;
+
+    if (current_sample < number_of_samples - 1) current_sample++; //if the end of current data set has been reached and there's no new data, keep applying filter on last piece of data
 }
 
 float BLEDevice::invSqrt(float x)
@@ -798,18 +812,20 @@ glm::quat BLEDevice::GetRotationQuaternion()
 
 void BLEDevice::SetSampleFrequency(float freq)
 {
-    sampleFreq = freq;
+    //sampleFreq = freq;
+    sampleFreq = 400; //this is the true amount of time inbetween data points
 }
 
-void BLEDevice::SetMagField(float x, float y, float z)
+void BLEDevice::SetMagField()
 {
-    bx = x;
-    by = y;
-    bz = z;
+    bx = mx.back();
+    by = my.back();
+    bz = mz.back();
 
-    float mag = Magnitude({ x, y, z });
+    float mag = Magnitude({ bx, by, bz });
 
-    m_to_g = GetRotationQuaternion({ x, y, z }, { ax, ay, az }); //g_to_m is the quaternion that will move things from the gravity frame to the magnetic frame
+    //want the most recent set of data, so use ax.back(), etc.
+    m_to_g = GetRotationQuaternion({ bx, by, bz }, { ax.back(), ay.back(), az.back() }); //g_to_m is the quaternion that will move things from the gravity frame to the magnetic frame
     g_to_m = Conjugate(m_to_g);
     //g_to_m = QuaternionMultiply(g_to_m, { 0, x / mag, y / mag, z / mag }); //rotates g_to_m by 180 degrees in the magnetic frame so that the X and Z axes are lined up correctly
 }
@@ -825,9 +841,9 @@ void BLEDevice::GetLinearAcceleration()
     QuatRotate(q, y_vector);
     QuatRotate(q, z_vector);
 
-    lin_ax = x_vector[1] - ax;
-    lin_ay = y_vector[1] - ay;
-    lin_az = z_vector[1] - az;
+    lin_ax = x_vector[1] - ax[current_sample];
+    lin_ay = y_vector[1] - ay[current_sample];
+    lin_az = z_vector[1] - az[current_sample];
 
     //std::cout << "[" << lin_ax << ", " << lin_ay << ", " << lin_az << "]" << std::endl;
 }
