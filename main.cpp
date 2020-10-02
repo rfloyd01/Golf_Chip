@@ -11,6 +11,7 @@
 #include <Header_Files/BluetoothLE.h>
 #include <Header_Files/graphics.h>
 #include <Header_Files/quaternion_functions.h>
+#include <Header_Files/print.h>
 
 using namespace winrt;
 using namespace Windows::Foundation;
@@ -20,7 +21,7 @@ using namespace Bluetooth::GenericAttributeProfile;
 auto serviceUUID = Bluetooth::BluetoothUuidHelper::FromShortId(0x180C);
 auto characteristicUUID = Bluetooth::BluetoothUuidHelper::FromShortId(0x2A56);
 
-void test(std::vector<float> &vec)
+void test(std::vector<float>& vec)
 {
     std::cout << "[";
     for (int i = 0; i < vec.size() - 1; i++) std::cout << vec[i] << ", ";
@@ -44,25 +45,18 @@ int main()
 {
     init_apartment();
 
-    float* p_float;
-    float hh[3] = {3, 4, 2};
-    float yy[3][4] = { {13, 9, 7, 15}, {8, 7, 4, 6}, {6, 4, 0, 3} };
-    float yeet[4];
-
-    matrixMultiply(&hh[0], 1, 3, &yy[0][0], 3, 4, &yeet[0]);
-    
-    for (int i = 0; i < 4; i++)
-    {
-        std::cout << yeet[i] << " ";
-    }
-    std::cout << std::endl;
+    MatLabMadgwick maggy(1.0 / 256, 0.1);
+    float g[3] = { 0, 0, 0 };
+    float a[3] = { 0 , 0, 9.81 };
+    float m[3] = { -23, 2, -40 };
+    maggy.Update(&g[0], &a[0], &m[0]);
 
     float frame_limit = 60;
     BLEDevice BLE_Nano(serviceUUID, frame_limit);
     BLE_Nano.Connect();
 
     while (!BLE_Nano.is_connected) //Go into this loop until the BLE device is connected
-    {  
+    {
     }
 
     //After BLE device is connected, allow data to collect for .5 seconds to make sure chip runs smoothly, also to establish initial Magnetic field vector
@@ -71,13 +65,13 @@ int main()
     BLE_Nano.UpdateData();
     BLE_Nano.SetMagField();
 
-    Calibration Cal(&BLE_Nano);    
+    Calibration Cal(&BLE_Nano);
 
     //Set up OpenGL and Shaders
     GL GraphicWindow;
     GraphicWindow.LoadTexture("FXOS8700.jpg");
     GraphicWindow.AddText({ "Press Space to enter calibration mode", 520.0f, 10.0f, 0.33f, glm::vec3(1.0f, 1.0f, 1.0f) });
-    
+
     //Connect Calibration class to graphic interface
     Cal.SetGraphics(&GraphicWindow);
     GraphicWindow.setCal(&Cal);
@@ -140,7 +134,8 @@ int main()
 
         //Add in a hard wait time before next loop iteration that is equal to 2/3 of the connection interval with the BLE chip divided by the number of samples
         while ((glfwGetTime() - loop_timer) * 1000 < 2.4) //2.4 milliseconds has been calculated by hand here, but put in a hard calculation in the code at some point
-        { }
+        {
+        }
     }
 
     GraphicWindow.DeleteBuffers();
@@ -164,6 +159,7 @@ MatLabMadgwick::MatLabMadgwick(float sp, float b)
 {
     sample_period = sp;
     beta = b;
+    Quaternion = { 1, 0, 0, 0 };
 }
 
 void MatLabMadgwick::Update(float* gyro, float* acc, float* mag)
@@ -198,24 +194,38 @@ void MatLabMadgwick::Update(float* gyro, float* acc, float* mag)
     J[0][0] = -2 * q.y; J[0][1] = 2 * q.z; J[0][2] = -2 * q.w; J[0][3] = 2 * q.x;
     J[1][0] = 2 * q.x;  J[1][1] = 2 * q.w; J[1][2] = -2 * q.z; J[1][3] = 2 * q.y;
     J[2][0] = 0;        J[2][1] = -4 * q.x; J[2][2] = -4 * q.y; J[2][3] = 0;
-
     J[3][0] = -2 * b.z * q.y; J[3][1] = 2 * b.z * q.z; J[3][2] = -4 * b.x * q.y - 2 * b.z * q.w; J[3][3] = -4 * b.x * q.z + 2 * b.z * q.x;
     J[4][0] = -2 * b.x * q.z + 2 * b.z * q.x; J[4][1] = 2 * b.x * q.y + 2 * b.z * q.w; J[4][2] = 2 * b.x * q.x + 2 * b.z * q.z; J[4][3] = -2 * b.x * q.w + 2 * b.z * q.y;
     J[5][0] = 2 * b.x * q.y; J[5][1] = 2 * b.x * q.z - 4 * b.z * q.x; J[5][2] = 2 * b.x * q.w - 4 * b.z * q.y; J[5][3] = 2 * b.x * q.x;
 
     //Transpose the J matrix
-    float J_prime[4][6] = {
+    float J_prime[4][6] =
+    {
         {J[0][0], J[1][0], J[2][0], J[3][0], J[4][0], J[5][0]},
         {J[0][1], J[1][1], J[2][1], J[3][1], J[4][1], J[5][1]},
         {J[0][2], J[1][2], J[2][2], J[3][2], J[4][2], J[5][2]},
         {J[0][3], J[1][3], J[2][3], J[3][3], J[4][3], J[5][3]}
     };
 
-    //step = J_prime * F
+    //calculate step magnitude
     float step[4][1];
-    matrixMultiply(&J_prime[0][0], 4, 6, &F[0][0], 6, 1, &step[0][0]);   
+    matrixMultiply(&J_prime[0][0], 4, 6, &F[0][0], 6, 1, &step[0][0]);
 
+    //convert step magnitude to a quaternion and then normalize it
+    glm::quat q_step = { step[0][0], step[1][0], step[2][0], step[3][0] };
+    Normalize(q_step);
 
+    //compute rate of change of quaternion
+    glm::quat qDot = QuaternionMultiply(q, { 0, Gyroscope[0], Gyroscope[2], Gyroscope[3] });
+    qDot *= .5;
+    qDot -= beta * q_step;
+
+    //Integrate to yield quaternion
+    q += qDot * sample_period;
+
+    //normalise quaternion
+    Normalize(q);
+    Quaternion = q;
 }
 
 glm::quat MatLabMadgwick::getCurrentQuaternion()
