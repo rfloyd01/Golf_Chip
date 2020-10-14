@@ -23,45 +23,22 @@ void Gnuplot::operator()(const string& command) {
     // flush is necessary, nothing gets plotted else
 };
 
-/*
-void Gnuplot::GraphData(std::vector<double> x_data, std::vector<std::vector<double> > y_data, bool cal = 0)
+void graphFromFile(std::string file_location, int data_sets)
 {
-    //takes data to grpah from x_data and y_data and saves it into a file named data.dat. This file is then graphed using gnuplot
-    //length of all data sets must be the same
+    //this function assumes that the first column of data will always be time
+    //ofstream myFile;
+    //myFile.open(file_location);
+    //for (int i = 0; i < mx.size(); i++) myFile << mx[i] << "    " << my[i] << "    " << mz[i] << '\n';
+    //myFile.close();
 
-    for (int i = 0; i < y_data.size(); i++)
-        if (y_data[i].size() > x_data.size() || y_data[i].size() < x_data.size())
-        {
-            std::cout << "Data sets must be the same length to graph them." << std::endl;
-            std::cout << "Y data size = " << y_data[i].size() << std::endl;
-            std::cout << "X data size = " << x_data.size() << std::endl;
-            return;
-        }
+    //std::string function = "plot 'mag.dat' using 1:2, 'mag.dat' using 1:3, 'mag.dat' using 2:3";
+    std::string function = "plot ";
 
-    ofstream myFile;
-    myFile.open("data.dat");
-    for (int i = 0; i < x_data.size(); i++)
+    for (int i = 0; i < data_sets - 1; i++)
     {
-        myFile << x_data[i] << "    ";
-        for (int j = 0; j < y_data.size(); j++)
-            myFile << y_data[j][i] << "    ";
-        myFile << '\n';
+        function += "'" + file_location + "' using 1:" + to_string(i + 2) + " with lines, ";
     }
-    myFile.close();
-
-    std::string function = "plot ", relative = "[0:" + to_string((int)x_data.back() + 1) + "] ";
-    relative = relative + " 0, " + relative + "9.80665, " + relative + "-9.80665";
-    for (int i = 0; i < y_data.size(); i++)
-    {
-        std::string next_line = "'data.dat' using 1:" + to_string(i + 2) + " with lines, ";
-        function = function + next_line;
-    }
-    function.pop_back(); function.pop_back(); //remove extra space and comma at end of string
-
+    function += "'" + file_location + "' using 1:" + to_string(data_sets + 1) + " with lines";
     Gnuplot plot;
-    if (cal) plot(function + ", " + relative);
-    else plot(function);
-
-    std::cout << "Plotting Done. Close graph to continue.\n" << std::endl;
+    plot(function);
 }
-*/
