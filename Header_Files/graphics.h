@@ -91,6 +91,8 @@ private:
 	std::vector<float>* p_data_y;
 	std::vector<float>* p_data_z;
 
+	DataType data_type;
+
 	unsigned int VBO, VAO, TVBO, TVAO;
 	unsigned int club_model_location, club_view_location;
 	std::vector<unsigned int> textures;
