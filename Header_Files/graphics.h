@@ -6,12 +6,14 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
-#include "glm.h"
-#include "shader.h"
-#include "calibration.h"
+#include <Header_Files/glm.h>
+#include <Header_Files/shader.h>
+#include <Header_Files/calibration.h>
+#include <Header_Files/BluetoothLE.h>
 
 class Shader;
 class Calibration;
+class BLEDevice;
 
 struct Character
 {
@@ -34,7 +36,7 @@ struct Text
 class GL
 {
 public:
-	GL();
+	GL(BLEDevice* sensor);
 	void LoadTexture(const char* name);
 	void Initialize();
 	//void UseShader();
@@ -43,8 +45,9 @@ public:
 	void BindTexture(unsigned int tex);
 	void setCal(Calibration* cal);
 
+	void Update();
 	void Render();
-	void RenderClub(glm::quat q);
+	void RenderClub();
 	void SetRenderBackground(int num);
 	void SetClubMatrices(glm::vec3 s, glm::vec3 t);
 
@@ -56,11 +59,11 @@ public:
 	void RenderText();
 	void EditText(int index, std::string new_text);
 	void EditText(int index, std::string new_text, float x, float y);
-	void LiveUpdate(float& ax, float& ay, float& az, float& gx, float& gy, float& gz, float& mx, float& my, float& mz, float& lax, float& lay, float& laz, float& vx, float& vy, float& vz, float& x, float& y, float& z);
+	void LiveUpdate();
 
 	void Terminate();
 	void RecordData();
-	void AddData(float x, float y, float z);
+	void AddData();
 	void InitializeText();
 	void Swap();
 
@@ -75,12 +78,18 @@ public:
 	void DisplayGraph();
 
 	GLFWwindow* GetWindow();
+	BLEDevice* p_BLE;
 
-	bool should_render_text = 0, display_readings = 0, reset_location = 0, record_data = 0, display_graph = 0;
+	bool should_render_text = 0, display_readings = 0, record_data = 0;
 	int current_display = 0;
 private:
 	void SetBuffers();
 	void MakeVec(std::vector<std::vector<float> >& vec, int size);
+
+	//pointers to sensor data
+	std::vector<float>* p_data_x;
+	std::vector<float>* p_data_y;
+	std::vector<float>* p_data_z;
 
 	unsigned int VBO, VAO, TVBO, TVAO;
 	unsigned int club_model_location, club_view_location;
