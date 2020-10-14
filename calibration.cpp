@@ -6,6 +6,7 @@
 #include <string>
 
 #include <Header_Files/gnuplot.h>
+#include <Header_Files/print.h>
 
 Calibration::Calibration(BLEDevice* sensor)
 {
@@ -36,19 +37,21 @@ void Calibration::CalibrationLoop()
 	{
 		processInput();
 
+		if (!p_sensor->data_available) continue; //only go forward if the sensor has data available
+		p_sensor->MadgwickUpdate();
 		if (cal_mode == 0)
 		{
 			//if calibration mode hasn't been selected yet then just render chip like normal
 			p_sensor->UpdateData();
-			p_sensor->Madgwick();
-			calibration_q = p_sensor->GetRotationQuaternion();
+			//p_sensor->Madgwick();
+			calibration_q = p_sensor->GetOpenGLQuaternion();
 		}
 
 		LiveUpdate();
 		if (collecting) CheckForNextStep();
 
 		//p_graphics->RenderClub(p_sensor->GetRotationQuaternion());
-		p_graphics->RenderClub(calibration_q);
+		p_graphics->RenderClub();
 		p_graphics->RenderText();
 		p_graphics->Swap();
 	}
@@ -69,11 +72,16 @@ void Calibration::CalibrationLoop()
 
 void Calibration::LiveUpdate()
 {
+	//TODO - Need to add the other sensor attributes here, also, use p_sensor->getData()
 	if (live_data)
 	{
-		p_graphics->EditText(0, "Ax = " + std::to_string(p_sensor->ax[p_sensor->current_sample]) + " m/s^2");
-		p_graphics->EditText(1, "Ay = " + std::to_string(p_sensor->ay[p_sensor->current_sample]) + " m/s^2");
-		p_graphics->EditText(2, "Az = " + std::to_string(p_sensor->az[p_sensor->current_sample]) + " m/s^2");
+		int cs = p_sensor->getCurrentSample();
+		std::vector<float>* p_data_x = p_sensor->GetData(ACCELERATION, X);
+		std::vector<float>* p_data_y = p_sensor->GetData(ACCELERATION, Y);
+		std::vector<float>* p_data_z = p_sensor->GetData(ACCELERATION, Z);
+		p_graphics->EditText(0, "Ax = " + std::to_string(p_data_x->at(cs)) + " m/s^2");
+		p_graphics->EditText(1, "Ay = " + std::to_string(p_data_y->at(cs)) + " m/s^2");
+		p_graphics->EditText(2, "Az = " + std::to_string(p_data_z->at(cs)) + " m/s^2");
 	}
 }
 
@@ -345,9 +353,14 @@ void Calibration::processInput()
 			{
 				if (!live_data)
 				{
-					p_graphics->InsertText(0, { "Ax = " + std::to_string(p_sensor->ax[p_sensor->current_sample]) + " m/s^2", 550.0, 70.0, 0.33, {1.0, 0.0, 0.0} });
-					p_graphics->InsertText(0, { "Ay = " + std::to_string(p_sensor->ay[p_sensor->current_sample]) + " m/s^2", 550.0, 50.0, 0.33, {0.0, 1.0, 0.0} });
-					p_graphics->InsertText(0, { "Az = " + std::to_string(p_sensor->az[p_sensor->current_sample]) + " m/s^2", 550.0, 30.0, 0.33, {0.0, 0.0, 1.0} });
+					int cs = p_sensor->getCurrentSample();
+					std::vector<float>* p_data_x = p_sensor->GetData(ACCELERATION, X);
+					std::vector<float>* p_data_y = p_sensor->GetData(ACCELERATION, Y);
+					std::vector<float>* p_data_z = p_sensor->GetData(ACCELERATION, Z);
+
+					p_graphics->InsertText(0, { "Ax = " + std::to_string(p_data_x->at(cs)) + " m/s^2", 550.0, 70.0, 0.33, {1.0, 0.0, 0.0} });
+					p_graphics->InsertText(0, { "Ay = " + std::to_string(p_data_y->at(cs)) + " m/s^2", 550.0, 50.0, 0.33, {0.0, 1.0, 0.0} });
+					p_graphics->InsertText(0, { "Az = " + std::to_string(p_data_z->at(cs)) + " m/s^2", 550.0, 30.0, 0.33, {0.0, 0.0, 1.0} });
 					live_data = 1;
 				}
 				else
@@ -574,7 +587,8 @@ void Calibration::GyroTest()
 		text_start = 6; if (live_data) text_start += 3;
 		p_graphics->ClearText(text_start); p_graphics->ClearText(text_start - 1); p_graphics->ClearText(text_start - 2); p_graphics->ClearText(text_start - 3);
 
-		gx.clear(); gy.clear(); gz.clear(); //clear out data from the previous gyro test
+		//clear out data from the previous gyro test
+		gx.clear(); gy.clear(); gz.clear();
 		time_data.clear();
 
 		//Render new text and delete it in the same step
@@ -655,8 +669,9 @@ void Calibration::GyroNextStep()
 			gx.push_back(p_sensor->GetData(3)); gy.push_back(p_sensor->GetData(4)); gz.push_back(p_sensor->GetData(5));
 
 			//record time stamps to potentially display graphs in the future
-			if (time_data.size() == 0) time_data.push_back(glfwGetTime() - data_time);
-			else time_data.push_back(glfwGetTime() - data_time + time_data.back());
+			//if (time_data.size() == 0) time_data.push_back(glfwGetTime() - data_time);
+			//else time_data.push_back(glfwGetTime() - data_time + time_data.back());
+			time_data.push_back(p_sensor->time_stamp / 1000.0);
 			data_time = glfwGetTime();
 		}
 	}
@@ -677,17 +692,31 @@ void Calibration::GyroNextStep()
 
 			//Integrate data to see measured angle of rotation
 			if (cal_stage == 4)
+			{
+				gyr_cal[2] = 0; //reset to 0 incase this is not the first calibration attempt
+				vprint(time_data);
 				for (int i = 1; i < gz.size(); i++)
 					gyr_cal[2] += IntegrateData(gz[i], gz[i - 1], time_data[i] - time_data[i - 1]);
+				std::cout << "Sensor rotated " << gyr_cal[2] << " degrees in the z-direction." << std::endl;
+				time_data.clear();
+			}
 
 			if (cal_stage == 5)
+			{
+				gyr_cal[0] = 0; //reset to 0 incase this is not the first calibration attempt
+				//vprint(time_data);
 				for (int i = 1; i < gx.size(); i++)
 					gyr_cal[0] += IntegrateData(gx[i], gx[i - 1], time_data[i] - time_data[i - 1]);
+				std::cout << "Sensor rotated " << gyr_cal[0] << " degrees in the x-direction." << std::endl;
+				time_data.clear();
+			}
 
 			if (cal_stage == 6)
 			{
+				gyr_cal[1] = 0; //reset to 0 incase this is not the first calibration attempt
 				for (int i = 1; i < gy.size(); i++)
 					gyr_cal[1] += IntegrateData(gy[i], gy[i - 1], time_data[i] - time_data[i - 1]);
+				std::cout << "Sensor rotated " << gyr_cal[1] << " degrees in the y-direction." << std::endl;
 				UpdateCalibrationNumbers();
 				changes_made = 1; //this will flag the code to update Calibration.txt
 			}
@@ -730,12 +759,14 @@ void Calibration::GyroNextStep()
 			else if (cal_stage == 5) p_graphics->AddText({ "Rotate toward you for: " + std::to_string(time_left) + " seconds", 10, 420, 0.5, {1.0, 1.0, 1.0} });
 			else if (cal_stage == 6) p_graphics->AddText({ "Rotate left for: " + std::to_string(time_left) + " seconds", 10, 420, 0.5, {1.0, 1.0, 1.0} });
 
-			gx.push_back(p_sensor->GetData(3)); gy.push_back(p_sensor->GetData(4)); gz.push_back(p_sensor->GetData(5)); //push_back raw sensor data
+			//make sure to apply offset values obtained from first portion of gyroscope calibration
+			gx.push_back(p_sensor->GetData(3) - gyr_off[0]); gy.push_back(p_sensor->GetData(4) - gyr_off[1]); gz.push_back(p_sensor->GetData(5) - gyr_off[2]); //push_back raw sensor data
 
 			//record time stamps so that data can be integrated
-			if (time_data.size() == 0) time_data.push_back(glfwGetTime() - data_time);
-			else time_data.push_back(glfwGetTime() - data_time + time_data.back());
-			data_time = glfwGetTime();
+			//if (time_data.size() == 0) time_data.push_back(glfwGetTime() - data_time);
+			//else time_data.push_back(glfwGetTime() - data_time + time_data.back());
+			//data_time = glfwGetTime();
+			time_data.push_back(p_sensor->time_stamp / 1000.0);
 		}
 	}
 }
@@ -754,6 +785,12 @@ void Calibration::MagTest()
 		data_time = glfwGetTime();
 
 		cal_stage++;
+
+		//initialize mag_max and mag_min values to both be equal to the current mag reading
+		//need to do this becuase there's a chance the maximum value should actually be less than 0 (-22 for example), or minimum value could be greater than 0 (+22)
+		mag_max[0] = p_sensor->GetData(6); mag_max[1] = p_sensor->GetData(7); mag_max[2] = p_sensor->GetData(8);
+		mag_min[0] = p_sensor->GetData(6); mag_min[1] = p_sensor->GetData(7); mag_min[2] = p_sensor->GetData(8);
+
 	}
 	else if (cal_stage == 1)
 	{
@@ -766,6 +803,9 @@ void Calibration::MagTest()
 		mag_off[1] = (mag_max[1] + mag_min[1]) / 2.0;
 		mag_off[2] = (mag_max[2] + mag_min[2]) / 2.0;
 
+		std::cout << "Maximum readings: X = " << mag_max[0] << ", Y = " << mag_max[1] << ", Z = " << mag_max[2] << std::endl;
+		std::cout << "Minimum readings: X = " << mag_min[0] << ", Y = " << mag_min[1] << ", Z = " << mag_min[2] << std::endl;
+
 		mag_max[0] -= mag_off[0]; mag_max[1] -= mag_off[1]; mag_max[2] -= mag_off[2]; //update max readings for gain calculation
 
 		//correct soft iron
@@ -775,6 +815,8 @@ void Calibration::MagTest()
 			my[i] -= mag_off[1];
 			mz[i] -= mag_off[2];
 		}
+
+		MagGraph(); //On this graph everything should be centered
 
 		float mag_magnitude = 51.3058; //ultimately need to hard code a way to look up current location and get this info
 		mag_gain[0] = mag_magnitude / mag_max[0];
@@ -895,7 +937,8 @@ void Calibration::MagGraph()
 	for (int i = 0; i < mx.size(); i++) myFile << mx[i] << "    " << my[i] << "    " << mz[i] << '\n';
 	myFile.close();
 
-	std::string function = "plot 'mag.dat' using 1:2, 'mag.dat' using 1:3, 'mag.dat' using 2:3";
+	//plot order is x (uses y and z data), y (uses x and z data), z (uses x and y data)
+	std::string function = "plot 'mag.dat' using 2:3, 'mag.dat' using 1:3, 'mag.dat' using 1:2";
 
 	Gnuplot plot;
 	plot(function);
