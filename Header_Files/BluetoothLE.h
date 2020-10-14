@@ -19,7 +19,7 @@ enum DataType
 	MAGNETIC,
 	LINEAR_ACCELERATION,
 	VELOCITY,
-	POSITION
+	LOCATION
 };
 enum Axis
 {
@@ -68,9 +68,6 @@ public:
 
 	//PUBLIC VARIABLES
 	//Position and Orientation variables
-	float lin_ax = 0, lin_ay = 0, lin_az = 0;
-	float vel_x = 0, vel_y = 0, vel_z = 0;
-	float loc_x = 0, loc_y = 0, loc_z = 0;
 	glm::quat Quaternion = { 1, 0, 0, 0 }; //represents the current orientation of the sensor
 
 	//Timing variables
@@ -116,6 +113,9 @@ private:
 	std::vector<std::vector<float> > accelerometer = { {}, {}, {} }; //ax, ay, az; //vectors of size number_of_samples which hold current calibrated acceleration readings
 	std::vector<std::vector<float> > gyroscope = { {}, {}, {} };
 	std::vector<std::vector<float> > magnetometer = { {}, {}, {} };
+	std::vector<std::vector<float> > linear_acceleration = { {}, {}, {} };
+	std::vector<std::vector<float> > velocity = { {}, {}, {} };
+	std::vector<std::vector<float> > location = { {}, {}, {} };
 	//std::vector<float> gx, gy, gz; //vectors of size number_of_samples which hold current calibrated gyroscope readings
 	//std::vector<float> mx, my, mz; //vectors of size number_of_samples which hold current calibrated magnetometer readings
 	std::vector<float> raw_sensor_data; //holds all raw data that comes in from the sensor
