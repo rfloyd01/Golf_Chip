@@ -9,8 +9,9 @@
 #include <Header_Files/vertices.h>
 #include <Header_Files/stb_image.h>
 #include <Header_Files/gnuplot.h>
+#include <Header_Files/print.h>
 
-GL::GL()
+GL::GL(BLEDevice *sensor)
 {
 	Initialize();
 	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
@@ -54,6 +55,8 @@ GL::GL()
 	record_data = false;
 	can_press_key = true;
 	key_time = .3; //sets the keyboard disable time after hitting one of the keyboard keys
+
+	p_BLE = sensor;
 }
 
 void GL::Initialize() //version should be entered like this: 3.3
@@ -162,6 +165,7 @@ void GL::BindTexture(unsigned int tex)
 void GL::Render()
 {
 	///TODO: need to form this into a MasterRender function at some point
+	/*
 	glClearColor(background_colors[background_color][0], background_colors[background_color][1], background_colors[background_color][2], background_colors[background_color][3]);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // also clear the depth buffer now!
 
@@ -173,9 +177,15 @@ void GL::Render()
 
 	if (!can_press_key) //unlock keyboard after key press here as this function gets called during every iteration of the main program loop
 		if (glfwGetTime() - key_timer >= key_time) can_press_key = true;
+		*/
+
+	SetClubMatrices({ 1.0, 1.0, 1.0 }, { p_BLE->loc_x, p_BLE->loc_y, p_BLE->loc_z });
+	RenderClub();
+	RenderText();
+	Swap();
 }
 
-void GL::RenderClub(glm::quat q)
+void GL::RenderClub()
 {
 	glClearColor(background_colors[background_color][0], background_colors[background_color][1], background_colors[background_color][2], background_colors[background_color][3]);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // also clear the depth buffer now!
@@ -186,6 +196,7 @@ void GL::RenderClub(glm::quat q)
 
 	clubShader.use();
 
+	glm::quat q = { p_BLE->Quaternion.w,  p_BLE->Quaternion.y, p_BLE->Quaternion.z, p_BLE->Quaternion.x };
 	glm::mat4 RotationMatrix = glm::mat4_cast(q);
 
 	glm::mat4 model = glm::mat4(1.0f); // make sure to initialize matrix to identity matrix first
@@ -485,8 +496,8 @@ void GL::processInput()
 		}
 		else if (glfwGetKey(window, GLFW_KEY_ENTER) == GLFW_PRESS)
 		{
-			//pressing Enter while not in calibration mode will return the club to the center of the screen
-			reset_location = 1;
+			//pressing Enter while not in calibration mode will return the club to the center of the screen, useful for when image starts to drift over time
+			p_BLE->ResetPosition();
 			can_press_key = false;
 			key_timer = glfwGetTime();
 		}
@@ -511,8 +522,9 @@ void GL::processInput()
 				{
 					record_data = 0;
 					EditText(4, "Press 'R' to record currently selected data set", 470.0f, 28.0f);
-					//DisplayGraph();
-					display_graph = 1;
+					DisplayGraph();
+					p_BLE->resetTime();
+					//display_graph = 1;
 				}
 			}
 			can_press_key = false;
@@ -521,62 +533,131 @@ void GL::processInput()
 	}
 }
 
-void GL::LiveUpdate(float& ax, float& ay, float& az, float& gx, float& gy, float& gz, float& mx, float& my, float& mz, float& lax, float& lay, float& laz, float& vx, float& vy, float& vz, float& x, float& y, float& z)
+void GL::Update()
+{
+	processInput();
+	AddData();
+	LiveUpdate();
+}
+
+void GL::LiveUpdate()
 {
 	if (display_readings)
 	{
+		int cs = p_BLE->getCurrentSample();
+		
 		if (current_display == 0)
 		{
+			p_data_x = p_BLE->GetData(ACCELERATION, X);
+			p_data_y = p_BLE->GetData(ACCELERATION, Y);
+			p_data_z = p_BLE->GetData(ACCELERATION, Z);
 			EditText(0, "Accelerometer Readings");
-			EditText(1, "Ax = " + std::to_string(ax) + " m/s^2");
-			EditText(2, "Ay = " + std::to_string(ay) + " m/s^2");
-			EditText(3, "Az = " + std::to_string(az) + " m/s^2");
+			EditText(1, "Ax = " + std::to_string(p_data_x->at(cs)) + " m/s^2");
+			EditText(2, "Ay = " + std::to_string(p_data_y->at(cs)) + " m/s^2");
+			EditText(3, "Az = " + std::to_string(p_data_z->at(cs)) + " m/s^2");
 		}
 		else if (current_display == 1)
 		{
+			p_data_x = p_BLE->GetData(ROTATION, X);
+			p_data_y = p_BLE->GetData(ROTATION, Y);
+			p_data_z = p_BLE->GetData(ROTATION, Z);
 			EditText(0, "Gyroscope Readings");
-			EditText(1, "Gx = " + std::to_string(gx) + " deg/s");
-			EditText(2, "Gy = " + std::to_string(gy) + " deg/s");
-			EditText(3, "Gz = " + std::to_string(gz) + " deg/s");
+			EditText(1, "Gx = " + std::to_string(p_data_x->at(cs)) + " deg/s");
+			EditText(2, "Gy = " + std::to_string(p_data_y->at(cs)) + " deg/s");
+			EditText(3, "Gz = " + std::to_string(p_data_z->at(cs)) + " deg/s");
 		}
 		else if (current_display == 2)
 		{
+			p_data_x = p_BLE->GetData(MAGNETIC, X);
+			p_data_y = p_BLE->GetData(MAGNETIC, Y);
+			p_data_z = p_BLE->GetData(MAGNETIC, Z);
 			EditText(0, "Magnetometer Readings");
-			EditText(1, "Mx = " + std::to_string(mx) + " uT");
-			EditText(2, "My = " + std::to_string(my) + " uT");
-			EditText(3, "Mz = " + std::to_string(mz) + " uT");
+			EditText(1, "Mx = " + std::to_string(p_data_x->at(cs)) + " uT");
+			EditText(2, "My = " + std::to_string(p_data_y->at(cs)) + " uT");
+			EditText(3, "Mz = " + std::to_string(p_data_z->at(cs)) + " uT");
 		}
 		else if (current_display == 3)
 		{
 			EditText(0, "Linear Acceleration");
-			EditText(1, "Ax = " + std::to_string(lax) + " m/s^2");
-			EditText(2, "Ay = " + std::to_string(lay) + " m/s^2");
-			EditText(3, "Az = " + std::to_string(laz) + " m/s^2");
+			EditText(1, "Ax = " + std::to_string(p_BLE->lin_ax) + " m/s^2");
+			EditText(2, "Ay = " + std::to_string(p_BLE->lin_ay) + " m/s^2");
+			EditText(3, "Az = " + std::to_string(p_BLE->lin_az) + " m/s^2");
 		}
 		else if (current_display == 4)
 		{
 			EditText(0, "Velocity");
-			EditText(1, "Vx = " + std::to_string(vx) + " m/s");
-			EditText(2, "Vy = " + std::to_string(vy) + " m/s");
-			EditText(3, "Vz = " + std::to_string(vz) + " m/s");
+			EditText(1, "Vx = " + std::to_string(p_BLE->vel_x) + " m/s");
+			EditText(2, "Vy = " + std::to_string(p_BLE->vel_y) + " m/s");
+			EditText(3, "Vz = " + std::to_string(p_BLE->vel_z) + " m/s");
 		}
 		else if (current_display == 5)
 		{
 			EditText(0, "Current Location");
-			EditText(1, "X = " + std::to_string(x) + " m");
-			EditText(2, "Y = " + std::to_string(y) + " m");
-			EditText(3, "Z = " + std::to_string(z) + " m");
+			EditText(1, "X = " + std::to_string(p_BLE->loc_x) + " m");
+			EditText(2, "Y = " + std::to_string(p_BLE->loc_y) + " m");
+			EditText(3, "Z = " + std::to_string(p_BLE->loc_z) + " m");
 		}
 	}
 }
 
-void GL::AddData(float x, float y, float z)
+void GL::AddData()
 {
+	if (record_data == 0) return; //only record data if in the proper mode
+
+	int sc = p_BLE->getCurrentSample();
+	float x = 0, y = 0, z = 0, time = p_BLE->time_stamp / 1000.0;
+
+	if (current_display == 0)
+	{
+		p_data_x = p_BLE->GetData(ACCELERATION, X);
+		p_data_y = p_BLE->GetData(ACCELERATION, Y);
+		p_data_z = p_BLE->GetData(ACCELERATION, Z);
+		x = p_data_x->at(sc);
+		y = p_data_y->at(sc);
+		z = p_data_z->at(sc);
+	}
+	else if (current_display == 1)
+	{
+		p_data_x = p_BLE->GetData(ROTATION, X);
+		p_data_y = p_BLE->GetData(ROTATION, Y);
+		p_data_z = p_BLE->GetData(ROTATION, Z);
+		x = p_data_x->at(sc);
+		y = p_data_y->at(sc);
+		z = p_data_z->at(sc);
+	}
+	else if (current_display == 2)
+	{
+		p_data_x = p_BLE->GetData(MAGNETIC, X);
+		p_data_y = p_BLE->GetData(MAGNETIC, Y);
+		p_data_z = p_BLE->GetData(MAGNETIC, Z);
+		x = p_data_x->at(sc);
+		y = p_data_y->at(sc);
+		z = p_data_z->at(sc);
+	}
+	else if (current_display == 3)
+	{
+		x = p_BLE->lin_ax;
+		y = p_BLE->lin_ay;
+		z = p_BLE->lin_az;
+	}
+	else if (current_display == 4)
+	{
+		x = p_BLE->vel_x;
+		y = p_BLE->vel_y;
+		z = p_BLE->vel_z;
+	}
+	else if (current_display == 5)
+	{
+		x = p_BLE->loc_x;
+		y = p_BLE->loc_y;
+		z = p_BLE->loc_z;
+	}
+
 	data_set[0].push_back(x);
 	data_set[1].push_back(y);
 	data_set[2].push_back(z);
 
-	time_set.push_back(glfwGetTime() - record_clock);
+	time_set.push_back(time);
 }
 
 void GL::MakeVec(std::vector<std::vector<float> >& vec, int size)
