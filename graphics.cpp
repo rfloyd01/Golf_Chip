@@ -164,22 +164,8 @@ void GL::BindTexture(unsigned int tex)
 
 void GL::Render()
 {
-	///TODO: need to form this into a MasterRender function at some point
-	/*
-	glClearColor(background_colors[background_color][0], background_colors[background_color][1], background_colors[background_color][2], background_colors[background_color][3]);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // also clear the depth buffer now!
-
-	glBindVertexArray(VAO);
-	glBindBuffer(GL_ARRAY_BUFFER, VBO);
-	BindTexture(0);
-
-	glDrawArrays(GL_TRIANGLES, 0, 36);
-
-	if (!can_press_key) //unlock keyboard after key press here as this function gets called during every iteration of the main program loop
-		if (glfwGetTime() - key_timer >= key_time) can_press_key = true;
-		*/
-
-	SetClubMatrices({ 1.0, 1.0, 1.0 }, { p_BLE->loc_x, p_BLE->loc_y, p_BLE->loc_z });
+	int cs = p_BLE->getCurrentSample();
+	SetClubMatrices({ 1.0, 1.0, 1.0 }, { p_BLE->GetData(LOCATION, X)->at(cs), p_BLE->GetData(LOCATION, Y)->at(cs), p_BLE->GetData(LOCATION, Z)->at(cs) });
 	RenderClub();
 	RenderText();
 	Swap();
@@ -545,58 +531,53 @@ void GL::LiveUpdate()
 	if (display_readings)
 	{
 		int cs = p_BLE->getCurrentSample();
-		
+		std::string st1, st2, st3;
 		if (current_display == 0)
 		{
-			p_data_x = p_BLE->GetData(ACCELERATION, X);
-			p_data_y = p_BLE->GetData(ACCELERATION, Y);
-			p_data_z = p_BLE->GetData(ACCELERATION, Z);
+			data_type = ACCELERATION;
+			st1 = "Ax =  m/s^2"; st2 = "Ay =  m/s^2"; st3 = "Az =  m/s^2";
 			EditText(0, "Accelerometer Readings");
-			EditText(1, "Ax = " + std::to_string(p_data_x->at(cs)) + " m/s^2");
-			EditText(2, "Ay = " + std::to_string(p_data_y->at(cs)) + " m/s^2");
-			EditText(3, "Az = " + std::to_string(p_data_z->at(cs)) + " m/s^2");
 		}
 		else if (current_display == 1)
 		{
-			p_data_x = p_BLE->GetData(ROTATION, X);
-			p_data_y = p_BLE->GetData(ROTATION, Y);
-			p_data_z = p_BLE->GetData(ROTATION, Z);
+			data_type = ROTATION;
+			st1 = "Gx =  deg/s"; st2 = "Gy =  deg/s"; st3 = "Gz =  deg/s";
 			EditText(0, "Gyroscope Readings");
-			EditText(1, "Gx = " + std::to_string(p_data_x->at(cs)) + " deg/s");
-			EditText(2, "Gy = " + std::to_string(p_data_y->at(cs)) + " deg/s");
-			EditText(3, "Gz = " + std::to_string(p_data_z->at(cs)) + " deg/s");
 		}
 		else if (current_display == 2)
 		{
-			p_data_x = p_BLE->GetData(MAGNETIC, X);
-			p_data_y = p_BLE->GetData(MAGNETIC, Y);
-			p_data_z = p_BLE->GetData(MAGNETIC, Z);
+			data_type = MAGNETIC;
+			st1 = "Mx =  uT"; st2 = "My =  uT"; st3 = "Mz =  uT";
 			EditText(0, "Magnetometer Readings");
-			EditText(1, "Mx = " + std::to_string(p_data_x->at(cs)) + " uT");
-			EditText(2, "My = " + std::to_string(p_data_y->at(cs)) + " uT");
-			EditText(3, "Mz = " + std::to_string(p_data_z->at(cs)) + " uT");
 		}
 		else if (current_display == 3)
 		{
+			data_type = LINEAR_ACCELERATION;
+			st1 = "Ax =  m/s^2"; st2 = "Ay =  m/s^2"; st3 = "Az =  m/s^2";
 			EditText(0, "Linear Acceleration");
-			EditText(1, "Ax = " + std::to_string(p_BLE->lin_ax) + " m/s^2");
-			EditText(2, "Ay = " + std::to_string(p_BLE->lin_ay) + " m/s^2");
-			EditText(3, "Az = " + std::to_string(p_BLE->lin_az) + " m/s^2");
 		}
 		else if (current_display == 4)
 		{
+			data_type = VELOCITY;
+			st1 = "Vx =  m/s"; st2 = "Vy =  m/s"; st3 = "Vz =  m/s";
 			EditText(0, "Velocity");
-			EditText(1, "Vx = " + std::to_string(p_BLE->vel_x) + " m/s");
-			EditText(2, "Vy = " + std::to_string(p_BLE->vel_y) + " m/s");
-			EditText(3, "Vz = " + std::to_string(p_BLE->vel_z) + " m/s");
 		}
 		else if (current_display == 5)
 		{
+			data_type = LOCATION;
+			st1 = "X  =  m"; st2 = "Y  =  m"; st3 = "Z  =  m";
 			EditText(0, "Current Location");
-			EditText(1, "X = " + std::to_string(p_BLE->loc_x) + " m");
-			EditText(2, "Y = " + std::to_string(p_BLE->loc_y) + " m");
-			EditText(3, "Z = " + std::to_string(p_BLE->loc_z) + " m");
 		}
+
+		p_data_x = p_BLE->GetData(data_type, X);
+		p_data_y = p_BLE->GetData(data_type, Y);
+		p_data_z = p_BLE->GetData(data_type, Z);
+		st1.insert(5, std::to_string(p_data_x->at(cs)));
+		st2.insert(5, std::to_string(p_data_y->at(cs)));
+		st3.insert(5, std::to_string(p_data_z->at(cs)));
+		EditText(1, st1);
+		EditText(2, st2);
+		EditText(3, st3);
 	}
 }
 
@@ -604,60 +585,22 @@ void GL::AddData()
 {
 	if (record_data == 0) return; //only record data if in the proper mode
 
-	int sc = p_BLE->getCurrentSample();
-	float x = 0, y = 0, z = 0, time = p_BLE->time_stamp / 1000.0;
+	int cs = p_BLE->getCurrentSample();
+	DataType dt;
 
-	if (current_display == 0)
-	{
-		p_data_x = p_BLE->GetData(ACCELERATION, X);
-		p_data_y = p_BLE->GetData(ACCELERATION, Y);
-		p_data_z = p_BLE->GetData(ACCELERATION, Z);
-		x = p_data_x->at(sc);
-		y = p_data_y->at(sc);
-		z = p_data_z->at(sc);
-	}
-	else if (current_display == 1)
-	{
-		p_data_x = p_BLE->GetData(ROTATION, X);
-		p_data_y = p_BLE->GetData(ROTATION, Y);
-		p_data_z = p_BLE->GetData(ROTATION, Z);
-		x = p_data_x->at(sc);
-		y = p_data_y->at(sc);
-		z = p_data_z->at(sc);
-	}
-	else if (current_display == 2)
-	{
-		p_data_x = p_BLE->GetData(MAGNETIC, X);
-		p_data_y = p_BLE->GetData(MAGNETIC, Y);
-		p_data_z = p_BLE->GetData(MAGNETIC, Z);
-		x = p_data_x->at(sc);
-		y = p_data_y->at(sc);
-		z = p_data_z->at(sc);
-	}
-	else if (current_display == 3)
-	{
-		x = p_BLE->lin_ax;
-		y = p_BLE->lin_ay;
-		z = p_BLE->lin_az;
-	}
-	else if (current_display == 4)
-	{
-		x = p_BLE->vel_x;
-		y = p_BLE->vel_y;
-		z = p_BLE->vel_z;
-	}
-	else if (current_display == 5)
-	{
-		x = p_BLE->loc_x;
-		y = p_BLE->loc_y;
-		z = p_BLE->loc_z;
-	}
+	//TODO - make a private class datatype variable that will automatically change as current display does
+	if (current_display == 0) dt = ACCELERATION;
+	else if (current_display == 1) dt = ROTATION;
+	else if (current_display == 2) dt = MAGNETIC;
+	else if (current_display == 3) dt = LINEAR_ACCELERATION;
+	else if (current_display == 4) dt = VELOCITY;
+	else if (current_display == 5) dt = LOCATION;
 
-	data_set[0].push_back(x);
-	data_set[1].push_back(y);
-	data_set[2].push_back(z);
+	data_set[0].push_back(p_BLE->GetData(dt, X)->at(cs));
+	data_set[1].push_back(p_BLE->GetData(dt, Y)->at(cs));
+	data_set[2].push_back(p_BLE->GetData(dt, Z)->at(cs));
 
-	time_set.push_back(time);
+	time_set.push_back(p_BLE->time_stamp / 1000.0);
 }
 
 void GL::MakeVec(std::vector<std::vector<float> >& vec, int size)
