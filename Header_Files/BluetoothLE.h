@@ -11,77 +11,115 @@ using namespace Windows::Foundation;
 using namespace Windows::Devices;
 using namespace Bluetooth::GenericAttributeProfile;
 
-//TODO: A lot of stuff in here was just randomly copied from a previous project
-//Should consider breaking apart Madgwick items, quaternion algebra and BLE functions
-//into separate files for readability
+//Some Enums that make code a little more readable
+enum DataType
+{
+	ACCELERATION,
+	ROTATION,
+	MAGNETIC,
+	LINEAR_ACCELERATION,
+	VELOCITY,
+	POSITION
+};
+enum Axis
+{
+	//x, y, and z correlate to 0, 1 and 2 respectively. It's a little easier to keep track this way then having numbers denote everything
+	X,
+	Y,
+	Z
+};
 
 class BLEDevice
 {
 public:
+	//PUBLIC FUNCTIONS
+	//Constructors
 	BLEDevice(guid ServiceUUID, float freq);
 
-	void DisplayLongUUID(guid yo);
+	//Connection
 	void Connect();
 
-	volatile bool is_connected = false;
-	volatile bool new_data = false;
-	//had issues with this bool variable not updating. Apparently it had something to do with being read by multiple threads
-	//more on the subject can be found here https://stackoverflow.com/questions/25425130/loop-doesnt-see-value-changed-by-other-thread-without-a-print-statement
-
-	//functions from old Connection.h file
+	//Data Updating
+	void Update(); //master update function
+	void MadgwickUpdate();
 	void UpdateData();
 	void UpdateCalibrationNumbers();
 	void ToggleCalNumbers();
-
-	//Madgwick related functions
-	void Madgwick();
-	void MadgwickModified();
-	void Floyd();
-	void MadgwickIMU();
-	float invSqrt(float x);
-	glm::quat GetRotationQuaternion();
-	void SetSampleFrequency(float freq);
-	void SetMagField();
-
-	//Data Passing Functions
-	float GetData(int index);
-	std::vector<float> GetData();
-	void GetLinearAcceleration();
-
 	void UpdatePosition();
 	void ResetPosition();
+	void resetTime();
 
+	//Variable Setting Functions
+	void SetSampleFrequency(float freq);
+	void SetMagField();
 	void SetPositionTimer();
 
-	const int number_of_samples = 10; //how many sensor samples are store in the BLE characteristic at a given time
-	//TODO: Look into a good way to read this value from the phyiscal BLE device
-	int current_sample = 0; //when updating rotation quaternion with Madgwick filter, need to know which data point is currently being looked at
+	//Data Passing Functions
+	//These functions are for outside classes that need to access private BLEDevice variables
+	//TODO - Is it better to return the physical variables or just a reference to the variables? Figure this out
+	float GetData(int index);
+	std::vector<float>* GetData(DataType dt, Axis a);
+	void GetLinearAcceleration();
+	glm::quat GetOpenGLQuaternion();
+	int getCurrentSample();
 
-	//vectors to store calibrated sensor data
-	std::vector<float> ax, ay, az;
-	std::vector<float> gx, gy, gz;
-	std::vector<float> mx, my, mz;
-	double temperature; //not currently using temperature but should consider it
+	//Other Functions
+	void DisplayLongUUID(guid yo);
 
-	//position data
+	//PUBLIC VARIABLES
+	//Position and Orientation variables
 	float lin_ax = 0, lin_ay = 0, lin_az = 0;
 	float vel_x = 0, vel_y = 0, vel_z = 0;
 	float loc_x = 0, loc_y = 0, loc_z = 0;
+	glm::quat Quaternion = { 1, 0, 0, 0 }; //represents the current orientation of the sensor
 
+	//Timing variables
+	float time_stamp = 0; //the time in milliseconds from when the program connected to the BLE device
+	float last_time_stamp = 0; 
+
+	//Bool variables
+	//had issues with these bool variables not updating so turned them into volatile variables. Apparently it had something to do with being read by multiple threads.
+	//more on the subject can be found here https://stackoverflow.com/questions/25425130/loop-doesnt-see-value-changed-by-other-thread-without-a-print-statement
+	volatile bool is_connected = false;
+	volatile bool data_available = false;
+	
 private:
+	//PRIVATE FUNCTIONS
+	//Connection
+	void SetUpDeviceWatcher();
+	concurrency::task<void> connectToBLEDevice(unsigned long long bluetoothAddress);
+
+	//Util Functions
 	float ConvertInt32toFloat(int32_t num);
+	float Integrate(float one, float two, float dt);
+
+	//Other Private Functions
+	std::wstring formatBluetoothAddress(unsigned long long BluetoothAddress);
+
+	//PRIVATE VARIABLES
+	//Sample Variables
+	//TODO: Look into a good way to read number_of_samples from BLE device upon initialization
+	const int number_of_samples = 10; //number of sensor samples stored in the BLE characteristic at a given time. Due to the time associated with reading BLE broadcasts, its more efficient to store multiple data points at a single time then try to read each individual point
+	int current_sample = 0; //when updating rotation quaternion with Madgwick filter, need to know which data point is currently being looked at
+
+	//Conversion Variables
+	//TODO - Add a way to update conversion variables based on what the current sensor settings are
 	float acc_conversion = 9.80665 * 0.000488; //using conversion for 4G FXOS8700
 	float gyr_conversion = 0.015625; //using conversion for +/- 500deg/s FXAS21002C
 	float mag_conversion = 0.1; //using standard conversion for FXOS8700
 
-	void SetUpDeviceWatcher();
-	concurrency::task<void> connectToBLEDevice(unsigned long long bluetoothAddress);
-
+	//Sensor specific variables
 	guid service_UUID, characteristic_UUID;
 	unsigned long long address;
-	std::vector<float> raw_sensor_data; //holds all raw data that comes in from the sensor
 
-	std::wstring formatBluetoothAddress(unsigned long long BluetoothAddress);
+	//Variables that store sensor data
+	std::vector<std::vector<float> > accelerometer = { {}, {}, {} }; //ax, ay, az; //vectors of size number_of_samples which hold current calibrated acceleration readings
+	std::vector<std::vector<float> > gyroscope = { {}, {}, {} };
+	std::vector<std::vector<float> > magnetometer = { {}, {}, {} };
+	//std::vector<float> gx, gy, gz; //vectors of size number_of_samples which hold current calibrated gyroscope readings
+	//std::vector<float> mx, my, mz; //vectors of size number_of_samples which hold current calibrated magnetometer readings
+	std::vector<float> raw_sensor_data; //holds all raw data that comes in from the sensor
+	double temperature; //not currently using temperature but should consider it
 
 	float gravity = 9.80665;
 	float lin_acc_threshold = 0.025; //linear acceleration will be set to zero unless it exceeds this threshold. This will help with location drift with time. This number was obtained experimentally as most white noise falls within +/- .025 of actual readings
@@ -92,11 +130,8 @@ private:
 	bool acceleration_event = 0; //when an acceleration above the threshold is detected, starts collecting velocity and position data. When acceleration has stopped in all directions, the event is set back to zero and velocity is halted
 	bool just_stopped = 0;
 
-	float ax_c, ay_c, az_c; //create copy variables so Madgwick filter doesn't alter original values from sensor
-	float gx_c, gy_c, gz_c; //create copy variables so Madgwick filter doesn't alter original values from sensor
-	float mx_c, my_c, mz_c; //create copy variables so Madgwick filter doesn't alter original values from sensor
-
 	glm::quat g_to_m, m_to_g; //quaternion that rotates the gravity frame to magnetic frame
+	glm::quat m_to_mprime = { 1, 0, 0, 0 };
 
 	//Timing Variables
 	double position_timer, end_timer;
@@ -107,25 +142,8 @@ private:
 	std::chrono::steady_clock::time_point timer;
 
 	//Madgwick items
-	float q0 = 1, q1 = 0, q2 = 0, q3 = 0;
-	float sampleFreq, beta = 0.035; //beta changes how reliant the Madgwick filter is on acc and mag data, good value is 0.035
-	glm::quat q = glm::quat(q0, q2, q3, q1), qnew = glm::quat(1, 0, 0, 0);
-	int instability_fix = 1;
+	float sampleFreq, beta = 0.1; //beta changes how reliant the Madgwick filter is on acc and mag data, good value is 0.035
 	float bx, by, bz; //consider setting these values to value of current location by default
-
-	//Quaternion arithmatic functions
-	float DotProduct(std::vector<float> vec1, std::vector<float> vec2);
-	std::vector<float> CrossProduct(std::vector<float> vec1, std::vector<float> vec2);
-	float Magnitude(std::vector<float> vec);
-	void Normalize(glm::quat& q);
-	void QuatRotate(glm::quat q, std::vector<float>& data);
-	void QuatRotate(glm::quat q1, glm::quat& q2);
-	glm::quat QuaternionMultiply(glm::quat q1, glm::quat q2);
-	glm::quat GetRotationQuaternion(std::vector<float> vec1, std::vector<float> vec2);
-	glm::quat GetRotationQuaternion(float angle, std::vector<float> vec);
-	glm::quat Conjugate(glm::quat q);
-
-	float Integrate(float one, float two, float dt);
 
 	//calibration numbers
 	double acc_off[3][3];
@@ -136,8 +154,5 @@ private:
 	double mag_gain[3];
 	bool cal_on = 1; //disabled calibration numbers so that raw data from sensor is obtained
 
-	//Calibration* p_cal;
-
 	Bluetooth::Advertisement::BluetoothLEAdvertisementWatcher bleAdvertisementsWatcher;
-	//Bluetooth::GenericAttributeProfile::GattCharacteristic characteristic;
 };
