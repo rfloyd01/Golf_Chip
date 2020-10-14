@@ -28,6 +28,9 @@ BLEDevice::BLEDevice(guid ServiceUUID, float freq)
         accelerometer[X].push_back(0); accelerometer[Y].push_back(0); accelerometer[Z].push_back(0);
         gyroscope[X].push_back(0); gyroscope[Y].push_back(0); gyroscope[Z].push_back(0);
         magnetometer[X].push_back(0); magnetometer[Y].push_back(0); magnetometer[Z].push_back(0);
+        linear_acceleration[X].push_back(0); linear_acceleration[Y].push_back(0); linear_acceleration[Z].push_back(0);
+        velocity[X].push_back(0); velocity[Y].push_back(0); velocity[Z].push_back(0);
+        location[X].push_back(0); location[Y].push_back(0); location[Z].push_back(0);
         raw_sensor_data.push_back(0); raw_sensor_data.push_back(0); raw_sensor_data.push_back(0);
         raw_sensor_data.push_back(0); raw_sensor_data.push_back(0); raw_sensor_data.push_back(0);
         raw_sensor_data.push_back(0); raw_sensor_data.push_back(0); raw_sensor_data.push_back(0);
@@ -169,27 +172,20 @@ void BLEDevice::UpdatePosition()
     GetLinearAcceleration();
     if (acceleration_event)
     {
-        float delta_t = glfwGetTime() - position_timer;
-        position_timer = glfwGetTime();
+        //these variables build on themselves so need to utilize previous value
+        //because of the way sensor data is stored, may need to wrap around to end of vector to get previous value
+        int last_sample = current_sample - 1;
+        if (current_sample == 0) last_sample = number_of_samples - 1; //last data point would have been end of current vector
 
-        float ax0 = lin_ax;
-        float ay0 = lin_ay;
-        float az0 = lin_az;
-
-        //Set threshold on Linear Acceleration to help with drift
-        if (lin_ax < lin_acc_threshold && lin_ax > -lin_acc_threshold) lin_ax = 0;
-        if (lin_ay < lin_acc_threshold && lin_ay > -lin_acc_threshold) lin_ay = 0;
-        if (lin_az < lin_acc_threshold && lin_az > -lin_acc_threshold) lin_az = 0;
-
-        if (lin_ax == 0 && lin_ay == 0 && lin_az == 0)
+        if (linear_acceleration[X][current_sample] == 0 && (linear_acceleration[Y][current_sample] && linear_acceleration[Z][current_sample] == 0))
         {
             if (just_stopped)
             {
-                if (glfwGetTime() - end_timer > .01) //if there's been no acceleration for .1 seconds, set velocity to zero to eliminate drift
+                if (time_stamp - end_timer > .01) //if there's been no acceleration for .1 seconds, set velocity to zero to eliminate drift
                 {
-                    vel_x = 0;
-                    vel_y = 0;
-                    vel_z = 0;
+                    velocity[X][current_sample] = 0;
+                    velocity[Y][current_sample] = 0;
+                    velocity[Z][current_sample] = 0;
                     acceleration_event = 0;
                     just_stopped = 0;
                 }
@@ -197,7 +193,7 @@ void BLEDevice::UpdatePosition()
             else
             {
                 just_stopped = 1;
-                end_timer = glfwGetTime();
+                end_timer = time_stamp;
             }
         }
         else
@@ -208,37 +204,34 @@ void BLEDevice::UpdatePosition()
             }
         }
 
-        float ax1 = lin_ax;
-        float ay1 = lin_ay;
-        float az1 = lin_az;
+        //velocity variable builds on itself so need to reference previous value
+        velocity[X][current_sample] = velocity[X][last_sample] + Integrate(linear_acceleration[X][last_sample], linear_acceleration[X][current_sample], 1.0/ sampleFreq);
+        velocity[Y][current_sample] = velocity[Y][last_sample] + Integrate(linear_acceleration[Y][last_sample], linear_acceleration[Y][current_sample], 1.0 / sampleFreq);
+        velocity[Z][current_sample] = velocity[Z][last_sample] + Integrate(linear_acceleration[Z][last_sample], linear_acceleration[Z][current_sample], 1.0 / sampleFreq);
 
-        float vx0 = vel_x;
-        float vy0 = vel_y;
-        float vz0 = vel_z;
-
-        vel_x += Integrate(ax0, ax1, delta_t);
-        vel_y += Integrate(ay0, ay1, delta_t);
-        vel_z += Integrate(az0, az1, delta_t);
-
+        //location variables also build on themselves so need to reference previous values
         //the minus signs are because movement was in opposite direction of what was expected
-        loc_x -= movement_scale * Integrate(vx0, vel_x, delta_t);
-        loc_y -= movement_scale * Integrate(vy0, vel_y, delta_t);
-        loc_z -= movement_scale * Integrate(vz0, vel_z, delta_t);
+        location[X][current_sample] = location[X][last_sample] + movement_scale * Integrate(velocity[X][last_sample], velocity[X][current_sample], 1.0 / sampleFreq);
+        location[X][current_sample] = location[Y][last_sample] + movement_scale * Integrate(velocity[Y][last_sample], velocity[Y][current_sample], 1.0 / sampleFreq);
+        location[X][current_sample] = location[Z][last_sample] + movement_scale * Integrate(velocity[Z][last_sample], velocity[Z][current_sample], 1.0 / sampleFreq);
     }
     else
     {
-        if (lin_ax > lin_acc_threshold || lin_ax < -lin_acc_threshold) acceleration_event = 1;
-        else if (lin_ay > lin_acc_threshold || lin_ay < -lin_acc_threshold) acceleration_event = 1;
-        else if (lin_az > lin_acc_threshold || lin_az < -lin_acc_threshold) acceleration_event = 1;
+        if (linear_acceleration[X][current_sample] > lin_acc_threshold || linear_acceleration[X][current_sample] < -lin_acc_threshold) acceleration_event = 1;
+        else if (linear_acceleration[Y][current_sample] > lin_acc_threshold || linear_acceleration[Y][current_sample] < -lin_acc_threshold) acceleration_event = 1;
+        else if (linear_acceleration[Z][current_sample] > lin_acc_threshold || linear_acceleration[Z][current_sample] < -lin_acc_threshold) acceleration_event = 1;
 
-        if (acceleration_event) position_timer = glfwGetTime();
+        if (acceleration_event) position_timer = time_stamp;
     }
 }
 void BLEDevice::ResetPosition()
 {
-    lin_ax = 0, lin_ay = 0, lin_az = 0;
-    vel_x = 0, vel_y = 0, vel_z = 0;
-    loc_x = 0, loc_y = 0, loc_z = 0;
+    for (int i = 0; i < number_of_samples; i++)
+    {
+        linear_acceleration[X].push_back(0); linear_acceleration[Y].push_back(0); linear_acceleration[Z].push_back(0);
+        velocity[X].push_back(0); velocity[Y].push_back(0); velocity[Z].push_back(0);
+        location[X].push_back(0); location[Y].push_back(0); location[Z].push_back(0);
+    }
 }
 void BLEDevice::resetTime()
 {
@@ -283,6 +276,9 @@ std::vector<float>* BLEDevice::GetData(DataType dt, Axis a)
     if (dt == ACCELERATION) return &accelerometer[a];
     else if (dt == ROTATION) return &gyroscope[a];
     else if (dt == MAGNETIC) return &magnetometer[a];
+    else if (dt == LINEAR_ACCELERATION) return &linear_acceleration[a];
+    else if (dt == VELOCITY) return &velocity[a];
+    else if (dt == LOCATION) return &location[a];
 }
 void BLEDevice::GetLinearAcceleration()
 {
@@ -295,11 +291,15 @@ void BLEDevice::GetLinearAcceleration()
     QuatRotate(Quaternion, y_vector);
     QuatRotate(Quaternion, z_vector);
 
-    lin_ax = x_vector[1] - accelerometer[X][current_sample];
-    lin_ay = y_vector[1] - accelerometer[Y][current_sample];
-    lin_az = z_vector[1] - accelerometer[Z][current_sample];
+    linear_acceleration[X][current_sample] = x_vector[1] - accelerometer[X][current_sample];
+    linear_acceleration[Y][current_sample] = y_vector[1] - accelerometer[Y][current_sample];
+    linear_acceleration[Z][current_sample] = z_vector[1] - accelerometer[Z][current_sample];
 
-    //std::cout << "[" << lin_ax << ", " << lin_ay << ", " << lin_az << "]" << std::endl;
+    //Set threshold on Linear Acceleration to help with drift
+    if (linear_acceleration[X][current_sample] < lin_acc_threshold && linear_acceleration[X][current_sample] > -lin_acc_threshold) linear_acceleration[X][current_sample] = 0;
+    if (linear_acceleration[Y][current_sample] < lin_acc_threshold && linear_acceleration[Y][current_sample] > -lin_acc_threshold) linear_acceleration[Y][current_sample] = 0;
+    if (linear_acceleration[Z][current_sample] < lin_acc_threshold && linear_acceleration[Z][current_sample] > -lin_acc_threshold) linear_acceleration[Z][current_sample] = 0;
+
 }
 glm::quat BLEDevice::GetOpenGLQuaternion()
 {
