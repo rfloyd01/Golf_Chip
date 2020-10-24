@@ -66,7 +66,7 @@ GL::GL(BLEDevice* sensor)
 	//Initialize message map with blank Text vectors for all message types
 	clearAllText(); //this function clears whatever is currently stored in messages map and creates empty containers for all message types
 
-	club.loadModel("C:/Users/Bobby/Documents/Coding/C++/BLE_33/BLE_33/Resources/Models/Golf_Club/golf_club.obj"); //load graphic representation of golf club being rendered
+	club.loadModel("Resources/Models/Golf_Club/golf_club.obj"); //load graphic representation of golf club being rendered
 }
 
 //Setup Functions
