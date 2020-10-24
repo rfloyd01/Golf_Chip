@@ -1,10 +1,12 @@
 #include "pch.h"
 
+#include <iostream>
 #include <Header_Files/sensor_fusion.h>
 #include <Header_Files/quaternion_functions.h>
 
 glm::quat Madgwick(glm::quat q, float gx, float gy, float gz, float ax, float ay, float az, float mx, float my, float mz, float delta_t, float beta)
 {
+    //The standard Madgwick algorithm as taken from online
     float recipNorm;
     float s0, s1, s2, s3;
     float hx, hy, hz;
@@ -133,8 +135,9 @@ glm::quat Madgwick(glm::quat q, float gx, float gy, float gz, float ax, float ay
     return q;
 }
 
-glm::quat MadgwickModified(glm::quat q, float gx, float gy, float gz, float ax, float ay, float az, float mx, float my, float mz, float delta_t, float beta)
+glm::quat MadgwickModified(glm::quat q, float gx, float gy, float gz, float ax, float ay, float az, float mx, float my, float mz, glm::quat h, float delta_t, float beta)
 {
+    //A slightly modified take on Madgwick's algorithm, uses a set Magnetic field for the Earth instead of calculating it to establish original orientation as straight into computer monitor
     float recipNorm;
     float s0, s1, s2, s3;
     float _2hx, _2hy, _2hz, _4hx, _4hy, _4hz;
@@ -186,8 +189,9 @@ glm::quat MadgwickModified(glm::quat q, float gx, float gy, float gz, float ax, 
     q3q3 = q.z * q.z;
 
     //Calculate the reference direction of Earth's magnetic field, b
-    glm::quat h = QuaternionMultiply(q, QuaternionMultiply({ 0, mx, my, mz }, Conjugate(q)));
+    //h = known hx, hy, hz
 
+    Normalize(h);
     _2hx = 2 * h.x;
     _2hy = 2 * h.y;
     _2hz = 2 * h.z;
@@ -219,10 +223,10 @@ glm::quat MadgwickModified(glm::quat q, float gx, float gy, float gz, float ax, 
     //s3 = (J[0][3] * F[0][0]) + (J[1][3] * F[1][0]) + (J[2][3] * F[2][0]) + (J[3][3] * F[3][0]) + (J[4][3] * F[4][0]) + (J[5][3] * F[5][0])
 
     // Gradient decent algorithm corrective step
-    s0 = -_2q2 * (2.0f * q1q3 - _2q0q2 - ax) + _2q1 * (2.0f * q0q1 + _2q2q3 - ay) - _2bz * q.y * (_2bx * (0.5f - q2q2 - q3q3) + _2bz * (q1q3 - q0q2) - mx) + (-_2bx * q.z + _2bz * q.x) * (_2bx * (q1q2 - q0q3) + _2bz * (q0q1 + q2q3) - my) + _2bx * q.y * (_2bx * (q0q2 + q1q3) + _2bz * (0.5f - q1q1 - q2q2) - mz);
-    s1 =  _2q3 * (2.0f * q1q3 - _2q0q2 - ax) + _2q0 * (2.0f * q0q1 + _2q2q3 - ay) - 4.0f * q.x * (1 - 2.0f * q1q1 - 2.0f * q2q2 - az) + _2bz * q.z * (_2bx * (0.5f - q2q2 - q3q3) + _2bz * (q1q3 - q0q2) - mx) + (_2bx * q.y + _2bz * q.w) * (_2bx * (q1q2 - q0q3) + _2bz * (q0q1 + q2q3) - my) + (_2bx * q.z - _4bz * q.x) * (_2bx * (q0q2 + q1q3) + _2bz * (0.5f - q1q1 - q2q2) - mz);
-    s2 = -_2q0 * (2.0f * q1q3 - _2q0q2 - ax) + _2q3 * (2.0f * q0q1 + _2q2q3 - ay) - 4.0f * q.y * (1 - 2.0f * q1q1 - 2.0f * q2q2 - az) + (-_4bx * q.y - _2bz * q.w) * (_2bx * (0.5f - q2q2 - q3q3) + _2bz * (q1q3 - q0q2) - mx) + (_2bx * q.x + _2bz * q.z) * (_2bx * (q1q2 - q0q3) + _2bz * (q0q1 + q2q3) - my) + (_2bx * q.w - _4bz * q.y) * (_2bx * (q0q2 + q1q3) + _2bz * (0.5f - q1q1 - q2q2) - mz);
-    s3 =  _2q1 * (2.0f * q1q3 - _2q0q2 - ax) + _2q2 * (2.0f * q0q1 + _2q2q3 - ay) + (-_4bx * q.z + _2bz * q.x) * (_2bx * (0.5f - q2q2 - q3q3) + _2bz * (q1q3 - q0q2) - mx) + (-_2bx * q.w + _2bz * q.y) * (_2bx * (q1q2 - q0q3) + _2bz * (q0q1 + q2q3) - my) + _2bx * q.x * (_2bx * (q0q2 + q1q3) + _2bz * (0.5f - q1q1 - q2q2) - mz);
+    s0 = ((-2 * q.y) * (2 * (q.x * q.z - q.w * q.y) - ax)) + ((2 * q.x) * (2 * (q.w * q.x + q.y * q.z) - ay)) + (0 * (2 * (0.5 - q.x * q.x - q.y * q.y) - az)) + ((_2hy * q.z - _2hz * q.y) * (_2hx * (0.5 - q.y * q.y - q.z * q.z) + _2hy * (q.w * q.z + q.x * q.y) + _2hz * (q.x * q.z - q.w * q.y) - mx)) + ((-_2hx * q.z + _2hz * q.x) * (_2hx * (q.x * q.y - q.w * q.z) + _2hy * (0.5 - q.x * q.x - q.z * q.z) + _2hz * (q.w * q.x + q.y * q.z) - my)) + ((_2hx * q.y - _2hy * q.x) * (_2hx * (q.w * q.y + q.x * q.z) + _2hy * (q.y * q.z - q.w * q.x) + _2hz * (0.5 - q.x * q.x - q.y * q.y) - mz));
+    s1 = ((2 * q.z) * (2 * (q.x * q.z - q.w * q.y) - ax)) + ((2 * q.w) * (2 * (q.w * q.x + q.y * q.z) - ay)) + ((-4 * q.x) * (2 * (0.5 - q.x * q.x - q.y * q.y) - az)) + ((_2hy * q.y + _2hz * q.z) * (_2hx * (0.5 - q.y * q.y - q.z * q.z) + _2hy * (q.w * q.z + q.x * q.y) + _2hz * (q.x * q.z - q.w * q.y) - mx)) + ((_2hx * q.y - _4hy * q.x + _2hz * q.w) * (_2hx * (q.x * q.y - q.w * q.z) + _2hy * (0.5 - q.x * q.x - q.z * q.z) + _2hz * (q.w * q.x + q.y * q.z) - my)) + ((_2hx * q.z - _2hy * q.w - _4hz * q.x) * (_2hx * (q.w * q.y + q.x * q.z) + _2hy * (q.y * q.z - q.w * q.x) + _2hz * (0.5 - q.x * q.x - q.y * q.y) - mz));
+    s2 = ((-2 * q.w) * (2 * (q.x * q.z - q.w * q.y) - ax)) + ((-2 * q.z) * (2 * (q.w * q.x + q.y * q.z) - ay)) + ((-4 * q.y) * (2 * (0.5 - q.x * q.x - q.y * q.y) - az)) + ((-_4hx * q.y + _2hy * q.x - _2hz * q.w) * (_2hx * (0.5 - q.y * q.y - q.z * q.z) + _2hy * (q.w * q.z + q.x * q.y) + _2hz * (q.x * q.z - q.w * q.y) - mx)) + ((_2hx * q.x + _2hz * q.z) * (_2hx * (q.x * q.y - q.w * q.z) + _2hy * (0.5 - q.x * q.x - q.z * q.z) + _2hz * (q.w * q.x + q.y * q.z) - my)) + ((_2hx * q.w + _2hy * q.z - _4hz * q.y) * (_2hx * (q.w * q.y + q.x * q.z) + _2hy * (q.y * q.z - q.w * q.x) + _2hz * (0.5 - q.x * q.x - q.y * q.y) - mz));
+    s3 = ((2 * q.x) * (2 * (q.x * q.z - q.w * q.y) - ax)) + ((2 * q.y) * (2 * (q.w * q.x + q.y * q.z) - ay)) + (0 * (2 * (0.5 - q.x * q.x - q.y * q.y) - az)) + ((-_4hx * q.z + _2hy * q.w + _2hz * q.x) * (_2hx * (0.5 - q.y * q.y - q.z * q.z) + _2hy * (q.w * q.z + q.x * q.y) + _2hz * (q.x * q.z - q.w * q.y) - mx)) + ((-_2hx * q.w - _4hy * q.z + _2hz * q.y) * (_2hx * (q.x * q.y - q.w * q.z) + _2hy * (0.5 - q.x * q.x - q.z * q.z) + _2hz * (q.w * q.x + q.y * q.z) - my)) + ((_2hx * q.x + _2hy * q.y) * (_2hx * (q.w * q.y + q.x * q.z) + _2hy * (q.y * q.z - q.w * q.x) + _2hz * (0.5 - q.x * q.x - q.y * q.y) - mz));
 
     recipNorm = invSqrt(s0 * s0 + s1 * s1 + s2 * s2 + s3 * s3); // normalise step magnitude
     s0 *= recipNorm;
