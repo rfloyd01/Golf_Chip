@@ -3,6 +3,7 @@
 #include <iostream>
 #include <string>
 #include <sstream>
+#include <fstream>
 #include <iomanip>
 #include <chrono>
 #include <Header_Files/BluetoothLE.h>
@@ -150,18 +151,18 @@ void BLEDevice::setMagField()
 //Data Passing Functions
 std::vector<float>* BLEDevice::getData(DataType dt, Axis a)
 {
-    if (dt == ACCELERATION) return &accelerometer[a];
-    else if (dt == ROTATION) return &gyroscope[a];
-    else if (dt == MAGNETIC) return &magnetometer[a];
-    else if (dt == LINEAR_ACCELERATION) return &linear_acceleration[a];
-    else if (dt == VELOCITY) return &velocity[a];
-    else if (dt == LOCATION) return &location[a];
+    if (dt == DataType::ACCELERATION) return &accelerometer[a];
+    else if (dt == DataType::ROTATION) return &gyroscope[a];
+    else if (dt == DataType::MAGNETIC) return &magnetometer[a];
+    else if (dt == DataType::LINEAR_ACCELERATION) return &linear_acceleration[a];
+    else if (dt == DataType::VELOCITY) return &velocity[a];
+    else if (dt == DataType::LOCATION) return &location[a];
 }
 std::vector<float>* BLEDevice::getRawData(DataType dt, Axis a)
 {
-    if (dt == ACCELERATION) return &r_accelerometer[a];
-    else if (dt == ROTATION) return &r_gyroscope[a];
-    else if (dt == MAGNETIC) return &r_magnetometer[a];
+    if (dt == DataType::ACCELERATION) return &r_accelerometer[a];
+    else if (dt == DataType::ROTATION) return &r_gyroscope[a];
+    else if (dt == DataType::MAGNETIC) return &r_magnetometer[a];
 }
 glm::vec3 BLEDevice::getLocation()
 {
