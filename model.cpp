@@ -3,17 +3,14 @@
 #include <iostream>
 #include <Header_Files/model.h>
 
+//PUBLIC FUNCTIONS
+//Constructors
 Model::Model()
 {
     //nothing happens with default initializer
 }
 
-void Model::Draw(Shader& shader)
-{
-    for (unsigned int i = 0; i < meshes.size(); i++)
-        meshes[i].Draw(shader);
-}
-
+//Setup Functions
 void Model::loadModel(std::string path)
 {
     Assimp::Importer import;
@@ -28,7 +25,32 @@ void Model::loadModel(std::string path)
 
     processNode(scene->mRootNode, scene);
 }
+void Model::setScale(glm::vec3 s)
+{
+    model_scale = s;
+}
+void Model::setLocation(glm::vec3 l)
+{
+    model_location = l;
+}
 
+//Rendering Functions
+glm::vec3 Model::getScale()
+{
+    return model_scale;
+}
+glm::vec3 Model::getLocation()
+{
+    return model_location;
+}
+void Model::Draw(Shader& shader)
+{
+    for (unsigned int i = 0; i < meshes.size(); i++)
+        meshes[i].Draw(shader);
+}
+
+//PRIVATE FUNCTIONS
+//Data Processing Functions
 void Model::processNode(aiNode* node, const aiScene* scene)
 {
     // process all the node's meshes (if any)
@@ -43,7 +65,6 @@ void Model::processNode(aiNode* node, const aiScene* scene)
         processNode(node->mChildren[i], scene);
     }
 }
-
 Mesh Model::processMesh(aiMesh* mesh, const aiScene* scene)
 {
     std::vector<Vertex> vertices;
@@ -95,7 +116,6 @@ Mesh Model::processMesh(aiMesh* mesh, const aiScene* scene)
 
     return Mesh(vertices, indices, textures);
 }
-
 std::vector<Texture> Model::loadMaterialTextures(aiMaterial* mat, aiTextureType type, std::string typeName)
 {
     std::vector<Texture> textures;
@@ -125,7 +145,6 @@ std::vector<Texture> Model::loadMaterialTextures(aiMaterial* mat, aiTextureType 
     }
     return textures;
 }
-
 unsigned int Model::TextureFromFile(const char* path, const std::string& directory)
 {
     std::string filename = std::string(path);
@@ -164,4 +183,14 @@ unsigned int Model::TextureFromFile(const char* path, const std::string& directo
     }
 
     return textureID;
+}
+
+//Helper Functions
+ModelType modeltypeFromInt(int m)
+{
+    if (m == 0) return ModelType::CLUB;
+    else if (m == 1) return ModelType::CHIP;
+    else if (m == 2) return ModelType::BALL;
+    else if (m == 3) return ModelType::BACKGROUND;
+    else if (m == 4) return ModelType::LINE_OBJECTS;
 }
