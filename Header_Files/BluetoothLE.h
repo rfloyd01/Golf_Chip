@@ -2,8 +2,7 @@
 
 #include <ppltasks.h> //library for creating parallel asynchronus tasks
 #include <pplawait.h> //library for using the co_await command
-
-#include <Header_Files/calibration.h>
+#include <Header_Files/glm.h>
 
 using namespace winrt;
 using namespace Windows::Foundation;
@@ -11,7 +10,7 @@ using namespace Windows::Devices;
 using namespace Bluetooth::GenericAttributeProfile;
 
 //Some Enums that make code a little more readable
-enum DataType
+enum class DataType
 {
 	ACCELERATION,
 	ROTATION,
@@ -28,6 +27,7 @@ enum Axis
 	Z = 2
 };
 
+//Class Definition
 class BLEDevice
 {
 public:
