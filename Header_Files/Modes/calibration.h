@@ -49,6 +49,9 @@ private:
 	void invertAccMatrix();
 	float integrateData(float& p1, float& p2, float t);
 
+	//Rendering Functions
+	void setRenderQuaternions(glm::vec3 axis, float angle, float time); //sets the set_render vector to render the chip rotating along axis by angle degrees over a time period of time
+
 	//PRIVATE VARIABLES
 	//State Variables
 	int cal_mode; //this variable keeps track of what type of calibration is occuring, 1 = accelerometer, 2 = gyroscope, 3 = magnetometer, 0 = calibration main menu
@@ -57,20 +60,25 @@ private:
 	//Bool Variables
 	bool collecting; //this bool object is true when actively collecting data, and false if not currently collecting data from chip
 	bool changes_made = 0; //tracks whether or not any calibration has taken place, if so, set to true so program knows to update calibration text file
+	bool preset_render = 0; //keeps track of whether or not a preset render should take place
 
 	//Arrays to hold new calibration numbers
-	float acc_off[3][3] = { 0 }; //acceleration offset values
+	float acc_off[3] = { 0 }; //acceleration offset values
 	float acc_gain[3][3] = { 0 }; //acceleration axis and cross axis gain values
 	float gyr_off[3] = { 0 };
 	float gyr_gain[3] = { 0 };
 	float mag_off[3] = { 0 };
-	float mag_gain[3] = { 0 };
+	float mag_gain[3][3] = { 0 };
 
 	//Vectors to hold raw uncalibrated data from sensor
 	std::vector<float> ax, ay, az; //vectors to hold acceleration cal. data
 	std::vector<float> gx, gy, gz; //vectors to hold gyroscope cal. data
 	std::vector<float> mx, my, mz; //vectors to hold gyroscope cal. data
 	std::vector<float> time_data;
+
+	//Rendering Variables
+	std::vector<glm::quat> set_render; //holds quaternions so that chip can be moved in a preset manner
+	int render_index = 0; //keeps track of which quaternion in set_render should be rendered
 
 	//Other Calibration Variables
 	float acc_cal[3][6] = { 0 }; //needed to isolate data from all six portions of the acc. tumble calibration: x1, x2, x3, x4, x5, x6, y1, y2... z6

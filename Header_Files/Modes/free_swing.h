@@ -34,6 +34,7 @@ private:
 	//PRIVATE FUNCTIONS
 	//Graph Related Functions
 	void displayGraph();
+	void addGraphData();
 
 	//Data Functions
 	void liveUpdate();

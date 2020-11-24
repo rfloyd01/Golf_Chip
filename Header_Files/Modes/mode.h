@@ -42,13 +42,18 @@ public:
 	virtual void modeEnd();
 	
 	//Get Functions
-	bool getSeparateRotation();
-	glm::quat getSeparateQuaternion();
+	//bool getSeparateRotation();
+	//glm::quat getSeparateQuaternion();
 	ModeType getModeType();
 	glm::vec3 getCameraLocation();
 	std::map<MessageType, std::vector<std::vector<Text> > >* getRenderText(); //returns a pointer to the message_map with all text to be rendered on screen
 	std::map<ModelType, std::vector<Model> >* getRenderModels(); //returns a pointer to the model_map with all models to be rendered
 	glm::vec3 getBackgroundColor();
+
+	//Set Functions
+	void setClubRotation(glm::quat q);
+	void setClubLocation(glm::vec3 l);
+	void setClubScale(glm::vec3 s);
 
 protected:
 	//PROTECTED FUNCTIONS
@@ -71,12 +76,12 @@ protected:
 
 	//Boolean Variables
 	bool mode_active = 0;
-	bool separate_rotation_matrix = 0; //sometimes wish to render club in a fixed position rather than according to current sensor reading, this bool allows that
+	//bool separate_rotation_matrix = 0; //sometimes wish to render club in a fixed position rather than according to current sensor reading, this bool allows that
 
 	//Rendering Variables
 	glm::vec3 background_color = { 0.0, 0.0, 0.0 }; //generic background color is black
 	glm::vec3 camera_location = { 0.0, 0.0, -1.5 }; //location in space of camera
-	glm::quat mode_q = { 1, 0, 0, 0 }; //used when it's necessary to render club or chip in position other than what sensor is currently reading
+	//glm::quat mode_q = { 1, 0, 0, 0 }; //used when it's necessary to render club or chip in position other than what sensor is currently reading
 	std::map<MessageType, std::vector<std::vector<Text> > > message_map; //a map used to store all words to be rendered on screen, a map is used to make it easier when adding and deleting messages
 	std::map<ModelType, std::vector<Model> > model_map; //a map used to store all images to be rendered on screen, a map is used to make it easier to keep track of where models are located
 
