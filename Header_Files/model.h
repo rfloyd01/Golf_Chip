@@ -49,11 +49,16 @@ public:
     void loadModel(std::string path);
     void setScale(glm::vec3 s);
     void setLocation(glm::vec3 l);
+    void setRotation(glm::quat r);
 
     //Rendering Functions
     glm::vec3 getScale();
     glm::vec3 getLocation();
+    glm::quat getRotation();
     void Draw(Shader& shader);
+
+    //Get Functions
+    std::vector<glm::vec3> getBoundingBox();
     
 private:
     //PRIVATE FUNCTIONS
@@ -62,6 +67,10 @@ private:
     Mesh processMesh(aiMesh* mesh, const aiScene* scene);
     std::vector<Texture> loadMaterialTextures(aiMaterial* mat, aiTextureType type, std::string typeName);
     unsigned int TextureFromFile(const char* path, const std::string& directory);
+
+    //Collision Detection Functions
+    void setBoundingBox();
+    glm::vec3 transformVertex(glm::vec3 vertex); //transforms a vertex to match current scale, location and rotation matrices
 
     //PRIVATE VARIABLES
     //Data Vectors
@@ -72,6 +81,14 @@ private:
     //Rendering Variables
     glm::vec3 model_scale = { 1.0, 1.0, 1.0 }; //by default everything should be the same size as the model loaded
     glm::vec3 model_location = { 0.0, 0.0, 0.0 }; //by default all models should be loaded at the origin
+    glm::quat model_rotation = { 1.0, 0.0, 0.0, 0.0 }; //by default all models aren't rotated
+
+    //Size Variables
+    glm::vec3 min_coordinates = { 1000.0, 1000.0, 1000.0 };
+    glm::vec3 max_coordinates = { -1000.0, -1000.0, -1000.0 };
+    //float x_min = 1000, x_max = -1000; //set min very high and max very low to make sure they get overridden
+    //float y_min = 1000, y_max = -1000; //set min very high and max very low to make sure they get overridden
+    //float z_min = 1000, z_max = -1000; //set min very high and max very low to make sure they get overridden
 };
 
 //Helper Functions

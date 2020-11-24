@@ -41,8 +41,6 @@ public:
 
 	//Rendering Functions
 	void masterRender();
-	void SetClubMatrices(glm::vec3 s, glm::vec3 t);
-	std::vector<glm::vec3> getClubMatrices();
 
 	//Text Based Functions
 	Character* getCharacterInfo(char c);
@@ -73,10 +71,15 @@ public:
 	//These functions only exist to pass variables directly from Sensor to mode classes
 	std::vector<float>* getData(DataType dt, Axis a);
 	std::vector<float>* getRawData(DataType dt, Axis a);
+	glm::quat getRotationQuaternion();
+	glm::quat getOpenGLQuaternion();
 	int getCurrentSample();
 	float getCurrentTime();
 	void resetTime();
 	void updateCalibrationNumbers();
+	void setMagField();
+	void setRotationQuaternion(glm::quat q);
+	BLEDevice* getBLEDevice(); //returns a pointer to the currently paired BLEDevice
 
 	//Mode Functions
 	void addMode(Mode* m);
@@ -117,7 +120,7 @@ private:
 	Shader clubShader, textShader, modelShader, lineShader;
 
 	//Rendering Variables
-	glm::vec3 club_translate, club_scale;
+	//glm::vec3 club_translate, club_scale;
 	unsigned int club_model_location, club_view_location;
 	std::vector<unsigned int> textures;
 

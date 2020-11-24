@@ -17,7 +17,8 @@ enum class DataType
 	MAGNETIC,
 	LINEAR_ACCELERATION,
 	VELOCITY,
-	LOCATION
+	LOCATION,
+	EULER_ANGLES
 };
 enum Axis
 {
@@ -58,6 +59,9 @@ public:
 	int getCurrentSample();
 	float getCurrentTime(); //returns the time stamp of the current data reading in seconds
 
+	//Set Functions
+	void setRotationQuaternion(glm::quat q); //allows the rotation quaternion to be set manually
+
 	//Other Functions
 	void displayLongUUID(guid yo);
 
@@ -79,6 +83,7 @@ private:
 	void updateMadgwick();
 	void updateLinearAcceleration();
 	void updatePosition();
+	void updateEulerAngles();
 
 	//Util Functions
 	float convertInt32toFloat(int32_t num);
@@ -115,6 +120,7 @@ private:
 	std::vector<std::vector<float> > linear_acceleration = { {}, {}, {} };
 	std::vector<std::vector<float> > velocity = { {}, {}, {} };
 	std::vector<std::vector<float> > location = { {}, {}, {} };
+	std::vector<std::vector<float> > euler_angles = { {}, {}, {} };
 
 	//Variables that store sensor data
 	std::vector<std::vector<float> > r_accelerometer = { {}, {}, {} }; //vectors of size number_of_samples which hold current calibrated acceleration readings
@@ -148,12 +154,12 @@ private:
 
 	//calibration numbers
 	//These variables will change when a calibration is carried out and are initialized based on data in calibration.txt in Resources
-	double acc_off[3][3] = { 0 };
+	double acc_off[3] = { 0 };
 	double acc_gain[3][3] = { 0 };
 	double gyr_off[3] = { 0 };
 	double gyr_gain[3] = { 0 };
 	double mag_off[3] = { 0 };
-	double mag_gain[3] = { 0 };
+	double mag_gain[3][3] = { 0 };
 
 	Bluetooth::Advertisement::BluetoothLEAdvertisementWatcher bleAdvertisementsWatcher;
 };
