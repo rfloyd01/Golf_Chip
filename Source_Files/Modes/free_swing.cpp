@@ -12,6 +12,9 @@ void FreeSwing::update()
 	Mode::processInput(); //process generic input second
 
 	if (display_data) liveUpdate(); //displays current sensor data on screen if the 'R' key has been pressed
+	if (record_data) addGraphData();
+
+	setClubRotation(p_graphics->getOpenGLQuaternion());
 }
 void FreeSwing::processInput()
 {
@@ -42,7 +45,7 @@ void FreeSwing::processInput()
 			addText(MessageType::SENSOR_INFO, { "", 10, 80, 0.5, {1.0, 0.0, 0.0}, p_graphics->getScreenWidth() });
 			addText(MessageType::SENSOR_INFO, { "", 10, 55, 0.5, {0.0, 1.0, 0.0}, p_graphics->getScreenWidth() });
 			addText(MessageType::SENSOR_INFO, { "", 10, 30, 0.5, {0.0, 0.0, 1.0}, p_graphics->getScreenWidth() });
-			addText(MessageType::SENSOR_INFO, { "Press num. keys 1-6 to cycle through data types.", 10, 10, 0.33, {1.0, 1.0, 1.0}, p_graphics->getScreenWidth() });
+			addText(MessageType::SENSOR_INFO, { "Press num. keys 1-7 to cycle through data types.", 10, 10, 0.33, {1.0, 1.0, 1.0}, p_graphics->getScreenWidth() });
 		}
 		p_graphics->resetKeyTimer();
 	}
@@ -106,6 +109,12 @@ void FreeSwing::processInput()
 		current_data_type = DataType::LOCATION;
 		p_graphics->resetKeyTimer();
 	}
+	else if (glfwGetKey(p_graphics->GetWindow(), GLFW_KEY_7) == GLFW_PRESS)
+	{
+		//switches live data stream to location values if currently being displayed
+		current_data_type = DataType::EULER_ANGLES;
+		p_graphics->resetKeyTimer();
+	}
 }
 void FreeSwing::modeStart()
 {
@@ -121,7 +130,9 @@ void FreeSwing::modeStart()
 	model_map[ModelType::CLUB].push_back(club);
 
 	//set up other basic veriables specific to each mode type
-	p_graphics->SetClubMatrices({ 1.0, 1.0, 1.0 }, { 0.0, 0.0, 0.0 });
+	//p_graphics->SetClubMatrices({ 1.0, 1.0, 1.0 }, { 0.0, 0.0, 0.0 });
+	setClubScale({ 1.0, 1.0, 1.0 });
+	setClubLocation({ 0.0, 0.0, 0.0 });
 }
 void FreeSwing::modeEnd()
 {
@@ -185,12 +196,35 @@ void FreeSwing::displayGraph()
 		graph_title = "'Location vs. Time'";
 		y_label = "'Position (m)'";
 	}
+	else if (current_data_type == DataType::EULER_ANGLES)
+	{
+		graph_title = "'Orientation vs. Time'";
+		y_label = "'Angle (deg)'";
+	}
 
 	Gnuplot graph;
 	graph("set title " + graph_title);
 	graph("set xlabel 'Time (s)'");
 	graph("set ylabel " + y_label);
 	graph(function);
+}
+void FreeSwing::addGraphData()
+{
+	//pointers to sensor data are set in liveUpdate() function
+	//this is ok because graph can only be displayed if sensor data is being displayed
+	int cs = p_graphics->getCurrentSample(); //consider making cs a class variable so it doesn't have to be set in every function that needs it
+	data_set[0].push_back(p_data_x->at(cs));
+	data_set[1].push_back(p_data_y->at(cs));
+	data_set[2].push_back(p_data_z->at(cs));
+	time_set.push_back(p_graphics->getCurrentTime());
+
+	//easier to read degrees than radians so if current mode is euler angles, convert to degrees from radians
+	if (current_data_type == DataType::EULER_ANGLES)
+	{
+		data_set[0][data_set[0].size() - 1] *= (180.0 / 3.14159);
+		data_set[1][data_set[0].size() - 1] *= (180.0 / 3.14159);
+		data_set[2][data_set[0].size() - 1] *= (180.0 / 3.14159);
+	}
 }
 
 //Data Functions
@@ -229,13 +263,27 @@ void FreeSwing::liveUpdate()
 		st1 = "X  =  m"; st2 = "Y  =  m"; st3 = "Z  =  m";
 		editMessageText(MessageType::SENSOR_INFO, 0, "Current Location");
 	}
+	else if (current_data_type == DataType::EULER_ANGLES)
+	{
+		st1 = "Roll   =  deg"; st2 = "Pitch  =  deg"; st3 = "Yaw   =  deg";
+		editMessageText(MessageType::SENSOR_INFO, 0, "Current Orientation");
+	}
 
 	p_data_x = p_graphics->getData(current_data_type, X);
 	p_data_y = p_graphics->getData(current_data_type, Y);
 	p_data_z = p_graphics->getData(current_data_type, Z);
-	st1.insert(5, std::to_string(p_data_x->at(cs)));
-	st2.insert(5, std::to_string(p_data_y->at(cs)));
-	st3.insert(5, std::to_string(p_data_z->at(cs)));
+	if (current_data_type == DataType::EULER_ANGLES) //convert from radians to degrees for ease of reading
+	{
+		st1.insert(9, std::to_string(p_data_x->at(cs) * 180.0 / 3.14159));
+		st2.insert(9, std::to_string(p_data_y->at(cs) * 180.0 / 3.14159));
+		st3.insert(8, std::to_string(p_data_z->at(cs) * 180.0 / 3.14159));
+	}
+	else
+	{
+		st1.insert(5, std::to_string(p_data_x->at(cs)));
+		st2.insert(5, std::to_string(p_data_y->at(cs)));
+		st3.insert(5, std::to_string(p_data_z->at(cs)));
+	}
 	editMessageText(MessageType::SENSOR_INFO, 1, st1);
 	editMessageText(MessageType::SENSOR_INFO, 2, st2);
 	editMessageText(MessageType::SENSOR_INFO, 3, st3);

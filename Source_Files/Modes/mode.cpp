@@ -29,7 +29,9 @@ void Mode::processInput()
 	else if (glfwGetKey(p_graphics->GetWindow(), GLFW_KEY_ENTER) == GLFW_PRESS)
 	{
 		//pressing Enter will return the club or chip to the center of the screen if currently being rendered, useful for when image starts to drift over time
-		p_graphics->SetClubMatrices(p_graphics->getClubMatrices()[0], { 0, 0, 0 }); //moves club back to center while maintaining current scale
+		p_graphics->setRotationQuaternion({ 1, 0, 0, 0 });
+		p_graphics->setMagField(); //resets the magnetic field of the sensor
+		p_graphics->getCurrentMode()->setClubLocation({ 0.0, 0.0, 0.0 }); //moves club back to center while maintaining current scale
 		p_graphics->resetKeyTimer();
 	}
 }
@@ -50,14 +52,6 @@ void Mode::modeEnd()
 }
 
 //Get Functions
-bool Mode::getSeparateRotation()
-{
-	return separate_rotation_matrix;
-}
-glm::quat Mode::getSeparateQuaternion()
-{
-	return mode_q;
-}
 ModeType Mode::getModeType()
 {
 	return mode_type;
@@ -77,6 +71,47 @@ std::map<ModelType, std::vector<Model> >* Mode::getRenderModels()
 glm::vec3 Mode::getBackgroundColor()
 {
 	return background_color;
+}
+
+//Set Functions
+void Mode::setClubRotation(glm::quat q)
+{
+	//sets the rotation matrix for all models in the CLUB and CHIP categories to the quaternion 'q'
+	for (int i = 0; i < model_map[ModelType::CLUB].size(); i++)
+	{
+		model_map[ModelType::CLUB][i].setRotation(q);
+	}
+
+	for (int i = 0; i < model_map[ModelType::CHIP].size(); i++)
+	{
+		model_map[ModelType::CHIP][i].setRotation(q);
+	}
+}
+void Mode::setClubLocation(glm::vec3 l)
+{
+	//sets the translation matrix for all models in the CLUB and CHIP categories to the vector 'l'
+	for (int i = 0; i < model_map[ModelType::CLUB].size(); i++)
+	{
+		model_map[ModelType::CLUB][i].setLocation(l);
+	}
+
+	for (int i = 0; i < model_map[ModelType::CHIP].size(); i++)
+	{
+		model_map[ModelType::CHIP][i].setLocation(l);
+	}
+}
+void Mode::setClubScale(glm::vec3 s)
+{
+	//sets the scale matrix for all models in the CLUB and CHIP categories to the vector 's'
+	for (int i = 0; i < model_map[ModelType::CLUB].size(); i++)
+	{
+		model_map[ModelType::CLUB][i].setScale(s);
+	}
+
+	for (int i = 0; i < model_map[ModelType::CHIP].size(); i++)
+	{
+		model_map[ModelType::CHIP][i].setScale(s);
+	}
 }
 
 //PRIVATE FUNCTIONS
@@ -143,11 +178,11 @@ void Mode::createSubMessages(MessageType mt, int index)
 			ch = *(p_graphics->getCharacterInfo(*c)); //reference character render data stored in the p_graphics class
 			if (*c == ' ') new_word = c + 1; //if a space is encountered it means a new word is about to start, makr this spot in case message needs to be wrapped to next line here
 
-			float xpos = temp_x + ch.Bearing.x * scale;
+			float xpos = temp_x + ch.Bearing.x * scale; //indicates where next letter starts
 			float ypos = message_map[mt][index][m].y - (ch.Size.y - ch.Bearing.y) * scale; //ypos denotes the bottom most part of the glyph
 
 			//if xpos is greater than x_end cutoff limit, cut off current message at last space and create new message from that point, append it to messages[index]
-			if (xpos >= message_map[mt][index][m].x_end)
+			if (xpos + (ch.Advance >> 6) * scale >= message_map[mt][index][m].x_end) //xpos + (ch.Advance >> 6) * scale = end location of current letter
 			{
 				std::string next_text = "";
 				for (auto cc = new_word; cc != message_map[mt][index][m].text.end(); cc++)
