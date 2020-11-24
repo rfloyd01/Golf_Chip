@@ -5,6 +5,7 @@
 #include <Header_Files/BluetoothLE.h>
 #include <Header_Files/graphics.h>
 #include <Header_Files/Modes/modes.h>
+#include <Header_Files/gnuplot.h>
 
 using namespace winrt;
 using namespace Windows::Foundation;
@@ -17,18 +18,18 @@ auto characteristicUUID = Bluetooth::BluetoothUuidHelper::FromShortId(0x2A56);
 int main()
 {
     init_apartment();
-    
+
     //Create BLE device and wait for it to connect to actual BLE device
     float sensor_refresh_rate = 400; //chip is set to gather all forms of data at 400Hz
     BLEDevice BLE_Nano(serviceUUID, sensor_refresh_rate);
 
-    /*
+    
     BLE_Nano.connect();
     while (BLE_Nano.data_available == false) //wait until chip has connected and started to gather data before moving onto the next step
     {
     }
-    */
     BLE_Nano.setMagField();
+    
 
     //Set up OpenGL and Shaders
     GL GraphicWindow(&BLE_Nano);

@@ -50,8 +50,8 @@ GL::GL(BLEDevice* sensor)
 	setTextBuffers();
 	InitializeText();
 
-	club_translate = { 0.0, 0.0, 0.0 };
-	club_scale = { 1.0, 1.0, 1.0 };
+	//club_translate = { 0.0, 0.0, 0.0 };
+	//club_scale = { 1.0, 1.0, 1.0 };
 
 	record_data = false;
 	can_press_key = true;
@@ -107,15 +107,6 @@ void GL::masterRender()
 	renderText();
 	Swap();
 }
-void GL::SetClubMatrices(glm::vec3 s, glm::vec3 t)
-{
-	club_scale = s;
-	club_translate = t;
-}
-std::vector<glm::vec3> GL::getClubMatrices()
-{
-	return { club_scale, club_translate };
-}
 
 //Text Based Functions
 Character* GL::getCharacterInfo(char c)
@@ -156,7 +147,6 @@ void GL::resetKeyTimer()
 //Utilization Functions
 void GL::masterUpdate()
 {
-
 	setCanPressKey(); //allow use of the keyboard if necessary
 	p_current_mode->update();
 }
@@ -259,6 +249,15 @@ std::vector<float>* GL::getRawData(DataType dt, Axis a)
 {
 	return p_BLE->getRawData(dt, a);
 }
+glm::quat GL::getRotationQuaternion()
+{
+	glm::quat q = p_BLE->getOpenGLQuaternion();
+	return { q.w, q.z, q.x, q.y }; //transforms OpenGL quaternion { Quaternion.w, Quaternion.y, Quaternion.z, Quaternion.x } back to normal coordinates;
+}
+glm::quat GL::getOpenGLQuaternion()
+{
+	return p_BLE->getOpenGLQuaternion();
+}
 int GL::getCurrentSample()
 {
 	return p_BLE->getCurrentSample();
@@ -274,6 +273,18 @@ void GL::resetTime()
 void GL::updateCalibrationNumbers()
 {
 	p_BLE->updateCalibrationNumbers();
+}
+void GL::setMagField()
+{
+	p_BLE->setMagField();
+}
+void GL::setRotationQuaternion(glm::quat q)
+{
+	p_BLE->setRotationQuaternion(q);
+}
+BLEDevice* GL::getBLEDevice()
+{
+	return p_BLE;
 }
 
 //Mode Functions
@@ -481,58 +492,26 @@ void GL::renderModels()
 	{
 		for (int i = 0; i < iter->second.size(); i++) //need to loop through all models of a specific ModelType
 		{
-			if (iter->first == ModelType::CLUB | iter->first == ModelType::CHIP) //render instructions specific to drawing the golf club
-			{
-				modelShader.use(); //ultimately will need to create a different shader specific to the golf club
-				glm::quat q; 
-				if (p_current_mode->getSeparateRotation()) q = p_current_mode->getSeparateQuaternion();
-				else q = p_BLE->getOpenGLQuaternion();
+			modelShader.use();
 
-				// view/projection transformations
-				glm::mat4 RotationMatrix = glm::mat4_cast(q); //create rotation matrix from current sensor rotation quaternion
+			// view/projection transformations
+			glm::mat4 RotationMatrix = glm::mat4_cast(iter->second[i].getRotation()); //create rotation matrix from current sensor rotation quaternion
+			glm::mat4 projection = glm::perspective((float)glm::radians(90.0), (float)screen_width / (float)screen_height, 0.1f, 100.0f);
+			glm::mat4 view = glm::mat4(1.0f);
+			view = glm::translate(view, p_current_mode->getCameraLocation());
 
-				glm::mat4 projection = glm::perspective((float)glm::radians(90.0), (float)screen_width / (float)screen_height, 0.1f, 100.0f);
-				glm::mat4 view = glm::mat4(1.0f);
-				//view = glm::translate(view, glm::vec3(0.0f, 0.0f, -1.5f));
-				view = glm::translate(view, p_current_mode->getCameraLocation());
+			modelShader.setMat4("projection", projection);
+			modelShader.setMat4("view", view);
 
-				modelShader.setMat4("projection", projection);
-				modelShader.setMat4("view", view);
+			// render the loaded model
+			//order of operations for model transform is translate, rotate, then scale
+			glm::mat4 model = glm::mat4(1.0f);
+			model = glm::translate(model, iter->second[i].getLocation());
+			model *= RotationMatrix;
+			model = glm::scale(model, iter->second[i].getScale());
 
-				// render the loaded model
-				//order of operations for model transform is translate, rotate, then scale
-				glm::mat4 model = glm::mat4(1.0f);
-				model = glm::translate(model, club_translate);
-				model *= RotationMatrix;
-				model = glm::scale(model, club_scale);
-				modelShader.setMat4("model", model);
-				iter->second[i].Draw(modelShader);
-			}
-			else if (iter->first == ModelType::LINE_OBJECTS)
-			{
-				modelShader.use();
-			    //glm::quat q = { (float)cos(glfwGetTime()/2.0), 0, 0, (float)sin(glfwGetTime()/2.0) };
-				glm::quat q = { .966, 0, 0, .259 };
-
-				// view/projection transformations
-				glm::mat4 RotationMatrix = glm::mat4_cast(q); //create rotation matrix from current sensor rotation quaternion
-				glm::mat4 projection = glm::perspective((float)glm::radians(90.0), (float)screen_width / (float)screen_height, 0.1f, 100.0f);
-				glm::mat4 view = glm::mat4(1.0f);
-				view = glm::translate(view, p_current_mode->getCameraLocation());
-
-				modelShader.setMat4("projection", projection);
-				modelShader.setMat4("view", view);
-
-				// render the loaded model
-				//order of operations for model transform is translate, rotate, then scale
-				glm::mat4 model = glm::mat4(1.0f);
-				model = glm::translate(model, iter->second[i].getLocation());
-				model *= RotationMatrix;
-				model = glm::scale(model, iter->second[i].getScale());
-				
-				modelShader.setMat4("model", model);
-				iter->second[i].Draw(modelShader);
-			}
+			modelShader.setMat4("model", model);
+			iter->second[i].Draw(modelShader);
 		}
 	}
 }

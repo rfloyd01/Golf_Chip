@@ -34,6 +34,7 @@ BLEDevice::BLEDevice(guid ServiceUUID, float freq)
         makeZeroVector(&linear_acceleration[i], number_of_samples);
         makeZeroVector(&velocity[i], number_of_samples);
         makeZeroVector(&location[i], number_of_samples);
+        makeZeroVector(&euler_angles[i], number_of_samples);
     }
 
     updateCalibrationNumbers(); //set calibration variables with most current data from calibration.txt
@@ -51,9 +52,16 @@ void BLEDevice::connect()
 void BLEDevice::masterUpdate()
 {
     //Master update function, calls for Madgwick filter to be run and then uses that data to call updatePosition() which calculates current lin_acc., vel. and loc.
-    updateMadgwick();
-    //TODO - linear acceleration updating seems to be incorrect, take a look at some point
-    //updatePosition();
+    updateMadgwick(); //update orientation quaternion
+    updatePosition(); //use newly calculated orientation to get linear acceleration, and then integrate that to get velocity, and again for position
+    updateEulerAngles(); //use newly calculated orientation quaternion to get Euler Angles of sensor (used in training modes)
+
+    current_sample++; //once all updates have been made go on to the next sample
+    if (current_sample >= number_of_samples)
+    {
+        data_available = false; //there is no more new data to look at, setting this variable to false would prevent Madgwick filter from running
+        current_sample--; //set current sample to last sample while waiting for more data to come in
+    }
 }
 void BLEDevice::updateCalibrationNumbers()
 {
@@ -63,49 +71,49 @@ void BLEDevice::updateCalibrationNumbers()
     char name[256];
 
     while (!inFile.eof())
-    {
-        inFile.getline(name, 256);
-        ///TODO: this if statement is crappy, code up something better later
-        if (line_count == 0)      acc_off[0][0] = std::stof(name);
-        else if (line_count == 1) acc_off[0][1] = std::stof(name);
-        else if (line_count == 2) acc_off[0][2] = std::stof(name);
-        else if (line_count == 3) acc_off[1][0] = std::stof(name);
-        else if (line_count == 4) acc_off[1][1] = std::stof(name);
-        else if (line_count == 5) acc_off[1][2] = std::stof(name);
-        else if (line_count == 6) acc_off[2][0] = std::stof(name);
-        else if (line_count == 7) acc_off[2][1] = std::stof(name);
-        else if (line_count == 8) acc_off[2][2] = std::stof(name);
+	{
+		inFile.getline(name, 256);
+		///TODO: this if statement is crappy, code up something better later, 
+		if (line_count == 2)      acc_off[0] = std::stof(name);
+		else if (line_count == 3) acc_off[1] = std::stof(name);
+		else if (line_count == 4) acc_off[2] = std::stof(name);
 
-        else if (line_count == 9) acc_gain[0][0] = std::stof(name);
-        else if (line_count == 10) acc_gain[0][1] = std::stof(name);
-        else if (line_count == 11) acc_gain[0][2] = std::stof(name);
-        else if (line_count == 12) acc_gain[1][0] = std::stof(name);
-        else if (line_count == 13) acc_gain[1][1] = std::stof(name);
-        else if (line_count == 14) acc_gain[1][2] = std::stof(name);
-        else if (line_count == 15) acc_gain[2][0] = std::stof(name);
-        else if (line_count == 16) acc_gain[2][1] = std::stof(name);
-        else if (line_count == 17) acc_gain[2][2] = std::stof(name);
+		else if (line_count == 7) acc_gain[0][0] = std::stof(name);
+		else if (line_count == 8) acc_gain[0][1] = std::stof(name);
+		else if (line_count == 9) acc_gain[0][2] = std::stof(name);
+		else if (line_count == 10) acc_gain[1][0] = std::stof(name);
+		else if (line_count == 11) acc_gain[1][1] = std::stof(name);
+		else if (line_count == 12) acc_gain[1][2] = std::stof(name);
+		else if (line_count == 13) acc_gain[2][0] = std::stof(name);
+		else if (line_count == 14) acc_gain[2][1] = std::stof(name);
+		else if (line_count == 15) acc_gain[2][2] = std::stof(name);
 
-        else if (line_count == 18) gyr_off[0] = std::stof(name);
-        else if (line_count == 19) gyr_off[1] = std::stof(name);
-        else if (line_count == 20) gyr_off[2] = std::stof(name);
+		else if (line_count == 18) gyr_off[0] = std::stof(name);
+		else if (line_count == 19) gyr_off[1] = std::stof(name);
+		else if (line_count == 20) gyr_off[2] = std::stof(name);
 
-        else if (line_count == 21) gyr_gain[0] = std::stof(name);
-        else if (line_count == 22) gyr_gain[1] = std::stof(name);
-        else if (line_count == 23) gyr_gain[2] = std::stof(name);
+		else if (line_count == 23) gyr_gain[0] = std::stof(name);
+		else if (line_count == 24) gyr_gain[1] = std::stof(name);
+		else if (line_count == 25) gyr_gain[2] = std::stof(name);
 
-        else if (line_count == 24) mag_off[0] = std::stof(name);
-        else if (line_count == 25) mag_off[1] = std::stof(name);
-        else if (line_count == 26) mag_off[2] = std::stof(name);
+		else if (line_count == 28) mag_off[0] = std::stof(name);
+		else if (line_count == 29) mag_off[1] = std::stof(name);
+		else if (line_count == 30) mag_off[2] = std::stof(name);
 
-        else if (line_count == 27) mag_gain[0] = std::stof(name);
-        else if (line_count == 28) mag_gain[1] = std::stof(name);
-        else if (line_count == 29) mag_gain[2] = std::stof(name);
+		else if (line_count == 33) mag_gain[0][0] = std::stof(name);
+		else if (line_count == 34) mag_gain[0][1] = std::stof(name);
+		else if (line_count == 35) mag_gain[0][2] = std::stof(name);
+		else if (line_count == 36) mag_gain[1][0] = std::stof(name);
+		else if (line_count == 37) mag_gain[1][1] = std::stof(name);
+		else if (line_count == 38) mag_gain[1][2] = std::stof(name);
+		else if (line_count == 39) mag_gain[2][0] = std::stof(name);
+		else if (line_count == 40) mag_gain[2][1] = std::stof(name);
+		else if (line_count == 41) mag_gain[2][2] = std::stof(name);
 
-        line_count++;
-    }
+		line_count++;
+	}
 
-    if (line_count < 30) std::cout << "Some calibration information wasn't updated." << std::endl;
+    if (line_count < 42) std::cout << "Some calibration information wasn't updated." << std::endl;
 
     inFile.close();
 }
@@ -151,18 +159,42 @@ void BLEDevice::setMagField()
 //Data Passing Functions
 std::vector<float>* BLEDevice::getData(DataType dt, Axis a)
 {
-    if (dt == DataType::ACCELERATION) return &accelerometer[a];
-    else if (dt == DataType::ROTATION) return &gyroscope[a];
-    else if (dt == DataType::MAGNETIC) return &magnetometer[a];
-    else if (dt == DataType::LINEAR_ACCELERATION) return &linear_acceleration[a];
-    else if (dt == DataType::VELOCITY) return &velocity[a];
-    else if (dt == DataType::LOCATION) return &location[a];
+    std::vector<float>* ans; //define pointer to float vector
+
+    //TODO: Consider making this function only take a data type and not a specific axis, that way the function won't have to be called three times to get a single data point
+    if (dt == DataType::ACCELERATION) ans = &accelerometer[a];
+    else if (dt == DataType::ROTATION) ans = &gyroscope[a];
+    else if (dt == DataType::MAGNETIC) ans = &magnetometer[a];
+    else if (dt == DataType::LINEAR_ACCELERATION) ans = &linear_acceleration[a];
+    else if (dt == DataType::VELOCITY) ans = &velocity[a];
+    else if (dt == DataType::LOCATION) ans = &location[a];
+    else if (dt == DataType::EULER_ANGLES) ans = &euler_angles[a];
+
+    if (ans == nullptr)
+    {
+        //was having an issue where a different part of the program was trying to access raw data after vectors were cleared, this is a quick fix for problem
+        //TODO: implement a more elegant solution at some point
+        accelerometer.push_back({ 0 });
+        return &accelerometer[0];
+    }
+    else return ans;
 }
 std::vector<float>* BLEDevice::getRawData(DataType dt, Axis a)
 {
-    if (dt == DataType::ACCELERATION) return &r_accelerometer[a];
-    else if (dt == DataType::ROTATION) return &r_gyroscope[a];
-    else if (dt == DataType::MAGNETIC) return &r_magnetometer[a];
+    std::vector<float>* ans; //define pointer to float vector
+
+    if (dt == DataType::ACCELERATION) ans = &r_accelerometer[a];
+    else if (dt == DataType::ROTATION) ans = &r_gyroscope[a];
+    else if (dt == DataType::MAGNETIC) ans = &r_magnetometer[a];
+
+    if (ans == nullptr)
+    {
+        //was having an issue where a different part of the program was trying to access raw data after vectors were cleared, this is a quick fix for problem
+        //TODO: implement a more elegant solution at some point
+        r_accelerometer.push_back({0});
+        return &r_accelerometer[0];
+    }
+    else return ans;
 }
 glm::vec3 BLEDevice::getLocation()
 {
@@ -183,6 +215,11 @@ float BLEDevice::getCurrentTime()
 {
     //returns the time that current sample was taken at in seconds
     return time_stamp / 1000.0;
+}
+
+void BLEDevice::setRotationQuaternion(glm::quat q)
+{
+    Quaternion = q;
 }
 
 //Other Public Functions
@@ -324,17 +361,17 @@ void BLEDevice::updateSensorData()
     //The count variable counts which data point should be used as multiple data points are taken from the sensor at a time
     for (int i = 0; i < number_of_samples; i++)
     {
-        accelerometer[X][i] = (acc_gain[0][0] * (r_accelerometer[X][i] - acc_off[0][0])) + (acc_gain[0][1] * (r_accelerometer[Y][i] - acc_off[1][1])) + (acc_gain[0][2] * (r_accelerometer[Z][i] - acc_off[2][2]));
-        accelerometer[Y][i] = -((acc_gain[1][0] * (r_accelerometer[X][i] - acc_off[0][0])) + (acc_gain[1][1] * (r_accelerometer[Y][i] - acc_off[1][1])) + (acc_gain[1][2] * (r_accelerometer[Z][i] - acc_off[2][2]))); //take out negative sign when using FXOS
-        accelerometer[Z][i] = (acc_gain[2][0] * (r_accelerometer[X][i] - acc_off[0][0])) + (acc_gain[2][1] * (r_accelerometer[Y][i] - acc_off[1][1])) + (acc_gain[2][2] * (r_accelerometer[Z][i] - acc_off[2][2]));
+        accelerometer[X][i] = (acc_gain[0][0] * (r_accelerometer[X][i] - acc_off[0])) + (acc_gain[0][1] * (r_accelerometer[Y][i] - acc_off[1])) + (acc_gain[0][2] * (r_accelerometer[Z][i] - acc_off[2]));
+        accelerometer[Y][i] = (acc_gain[1][0] * (r_accelerometer[X][i] - acc_off[0])) + (acc_gain[1][1] * (r_accelerometer[Y][i] - acc_off[1])) + (acc_gain[1][2] * (r_accelerometer[Z][i] - acc_off[2]));
+        accelerometer[Z][i] = (acc_gain[2][0] * (r_accelerometer[X][i] - acc_off[0])) + (acc_gain[2][1] * (r_accelerometer[Y][i] - acc_off[1])) + (acc_gain[2][2] * (r_accelerometer[Z][i] - acc_off[2]));
 
         gyroscope[X][i] = (r_gyroscope[X][i] - gyr_off[0]) * gyr_gain[0];
         gyroscope[Y][i] = (r_gyroscope[Y][i] - gyr_off[1]) * gyr_gain[1];
         gyroscope[Z][i] = (r_gyroscope[Z][i] - gyr_off[2]) * gyr_gain[2];
 
-        magnetometer[X][i] = -(r_magnetometer[X][i] - mag_off[0]) * mag_gain[0]; //take out negative sign when using FXOS
-        magnetometer[Y][i] = -(r_magnetometer[Y][i] - mag_off[1]) * mag_gain[1]; //take out negative sign when using FXOS
-        magnetometer[Z][i] = (r_magnetometer[Z][i] - mag_off[2]) * mag_gain[2];
+        magnetometer[X][i] = (mag_gain[0][0] * (r_magnetometer[X][i] - mag_off[0])) + (mag_gain[0][1] * (r_magnetometer[Y][i] - mag_off[1])) + (mag_gain[0][2] * (r_magnetometer[Z][i] - mag_off[2]));
+        magnetometer[Y][i] = (mag_gain[1][0] * (r_magnetometer[X][i] - mag_off[0])) + (mag_gain[1][1] * (r_magnetometer[Y][i] - mag_off[1])) + (mag_gain[1][2] * (r_magnetometer[Z][i] - mag_off[2]));
+        magnetometer[Z][i] = (mag_gain[2][0] * (r_magnetometer[X][i] - mag_off[0])) + (mag_gain[2][1] * (r_magnetometer[Y][i] - mag_off[1])) + (mag_gain[2][2] * (r_magnetometer[Z][i] - mag_off[2]));
 
         masterUpdate(); //update rotation quaternion, lin_acc., velocity and position with every new data point that comes in
 
@@ -342,13 +379,13 @@ void BLEDevice::updateSensorData()
         //Hard code a wait time of 1/sampleFreq seconds to ensure that rendering looks smooth
         std::chrono::high_resolution_clock::time_point tt = std::chrono::high_resolution_clock::now();
         while (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - tt).count() <= 1000.0 / sampleFreq) {}
-    }
+    } 
     current_sample = 0; //since a new set of data has come in, start from the beginning of it when doing Madgwick filter
-    data_available = true; //main program can now run filter, render, etc.
+    data_available = true; //do I still need this variable?
 }
 void BLEDevice::updateMadgwick()
 {
-    if (!data_available) return; //only do things if there's new data to process
+    //if (!data_available) return; //only do things if there's new data to process
 
     //set up current time information
     last_time_stamp = time_stamp;
@@ -359,33 +396,29 @@ void BLEDevice::updateMadgwick()
     int cs = current_sample; //this is only here because it became annoying to keep writing out current_sample
     //Quaternion = Madgwick(Quaternion, gyroscope[X][cs], gyroscope[Y][cs], gyroscope[Z][cs], accelerometer[X][cs], accelerometer[Y][cs], accelerometer[Z][cs], magnetometer[X][cs], magnetometer[Y][cs], magnetometer[Z][cs], delta_t, beta);
     Quaternion = MadgwickModified(Quaternion, gyroscope[X][cs], gyroscope[Y][cs], gyroscope[Z][cs], accelerometer[X][cs], accelerometer[Y][cs], accelerometer[Z][cs], magnetometer[X][cs], magnetometer[Y][cs], magnetometer[Z][cs], { 0, bx, by, bz }, delta_t, beta);
-    current_sample++;
-
-    if (current_sample >= number_of_samples)
-    {
-        data_available = false; //there is no more new data to look at, setting this variable to false would prevent Madgwick filter from running
-        current_sample--; //set current sample to last sample while waiting for more data to come in
-    }
 }
 void BLEDevice::updateLinearAcceleration()
 {
+    //if (!data_available) return;
+
     ///TODO: There's probably a quicker way to get vector than doing three quaternion rotations, update this at some point
     std::vector<float> x_vector = { gravity, 0, 0 };
     std::vector<float> y_vector = { 0, gravity, 0 };
-    std::vector<float> z_vector = { 0, 0, -gravity };
+    std::vector<float> z_vector = { 0, 0, gravity };
 
     QuatRotate(Quaternion, x_vector);
     QuatRotate(Quaternion, y_vector);
     QuatRotate(Quaternion, z_vector);
 
-    linear_acceleration[X][current_sample] = x_vector[1] - accelerometer[X][current_sample];
-    linear_acceleration[Y][current_sample] = y_vector[1] - accelerometer[Y][current_sample];
-    linear_acceleration[Z][current_sample] = z_vector[1] - accelerometer[Z][current_sample];
+    int cs = current_sample; //only put this in here because it was tedious to keep writing out current_sample
+    linear_acceleration[X][cs] = accelerometer[X][cs] - x_vector[2];
+    linear_acceleration[Y][cs] = accelerometer[Y][cs] - y_vector[2];
+    linear_acceleration[Z][cs] = accelerometer[Z][cs] - z_vector[2];
 
     //Set threshold on Linear Acceleration to help with drift
-    if (linear_acceleration[X][current_sample] < lin_acc_threshold && linear_acceleration[X][current_sample] > -lin_acc_threshold) linear_acceleration[X][current_sample] = 0;
-    if (linear_acceleration[Y][current_sample] < lin_acc_threshold && linear_acceleration[Y][current_sample] > -lin_acc_threshold) linear_acceleration[Y][current_sample] = 0;
-    if (linear_acceleration[Z][current_sample] < lin_acc_threshold && linear_acceleration[Z][current_sample] > -lin_acc_threshold) linear_acceleration[Z][current_sample] = 0;
+    //if (linear_acceleration[X][current_sample] < lin_acc_threshold && linear_acceleration[X][current_sample] > -lin_acc_threshold) linear_acceleration[X][current_sample] = 0;
+    //if (linear_acceleration[Y][current_sample] < lin_acc_threshold && linear_acceleration[Y][current_sample] > -lin_acc_threshold) linear_acceleration[Y][current_sample] = 0;
+    //if (linear_acceleration[Z][current_sample] < lin_acc_threshold && linear_acceleration[Z][current_sample] > -lin_acc_threshold) linear_acceleration[Z][current_sample] = 0;
 }
 void BLEDevice::updatePosition()
 {
@@ -443,6 +476,20 @@ void BLEDevice::updatePosition()
 
         if (acceleration_event) position_timer = time_stamp;
     }
+}
+void BLEDevice::updateEulerAngles()
+{
+    //TODO: currently calculating these angles every loop which really shouldn't be necessary, look into creating a bool variable that lets BLEDevice know if it should calculate angles
+
+    //calculate pitch separately to avoid NaN results
+    float pitch = 2 * (Quaternion.w * Quaternion.y - Quaternion.x * Quaternion.z);
+    if (pitch > 1) euler_angles[1][current_sample] = 1.570795; //case for +90 degrees
+    else if (pitch < -1) euler_angles[1][current_sample] = -1.570795; //case for -90 degrees
+    else  euler_angles[1][current_sample] = asinf(pitch); //all other cases
+
+    //no NaN issues for roll and yaw
+    euler_angles[0][current_sample] = atan2f(2 * (Quaternion.w * Quaternion.x + Quaternion.y * Quaternion.z), 1 - 2 * (Quaternion.x * Quaternion.x + Quaternion.y * Quaternion.y));
+    euler_angles[2][current_sample] = atan2f(2 * (Quaternion.w * Quaternion.z + Quaternion.x * Quaternion.y), 1 - 2 * (Quaternion.y * Quaternion.y + Quaternion.z * Quaternion.z));
 }
 
 //Util Functions

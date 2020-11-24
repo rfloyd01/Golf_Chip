@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <Header_Files/model.h>
+#include <Header_Files/quaternion_functions.h>
 
 //PUBLIC FUNCTIONS
 //Constructors
@@ -24,6 +25,9 @@ void Model::loadModel(std::string path)
     directory = path.substr(0, path.find_last_of('/'));
 
     processNode(scene->mRootNode, scene);
+
+    //after all nodes are processed calculate the hit box for the model
+    setBoundingBox();
 }
 void Model::setScale(glm::vec3 s)
 {
@@ -32,6 +36,10 @@ void Model::setScale(glm::vec3 s)
 void Model::setLocation(glm::vec3 l)
 {
     model_location = l;
+}
+void Model::setRotation(glm::quat r)
+{
+    model_rotation = r;
 }
 
 //Rendering Functions
@@ -43,10 +51,22 @@ glm::vec3 Model::getLocation()
 {
     return model_location;
 }
+glm::quat Model::getRotation()
+{
+    return model_rotation;
+}
 void Model::Draw(Shader& shader)
 {
     for (unsigned int i = 0; i < meshes.size(); i++)
         meshes[i].Draw(shader);
+}
+
+//Get Functions
+std::vector<glm::vec3> Model::getBoundingBox()
+{
+    std::vector<glm::vec3> bb;
+    bb.push_back(transformVertex(min_coordinates));  bb.push_back(transformVertex(max_coordinates));
+    return bb;
 }
 
 //PRIVATE FUNCTIONS
@@ -183,6 +203,44 @@ unsigned int Model::TextureFromFile(const char* path, const std::string& directo
     }
 
     return textureID;
+}
+
+//Collision Detection Functions
+void Model::setBoundingBox()
+{
+    //go through all vertices in mesh to find min and max values for x, y, z
+    //should only need to call this function when a model is first created
+    for (int i = 0; i < meshes.size(); i++)
+    {
+        for (int j = 0; j < meshes[i].vertices.size(); j++)
+        {
+            //only care about the Position vector within the Vertex object
+            float x_pos = meshes[i].vertices[j].Position[0];
+            float y_pos = meshes[i].vertices[j].Position[1];
+            float z_pos = meshes[i].vertices[j].Position[2];
+
+            //check x
+            if (x_pos > max_coordinates[0]) max_coordinates[0] = x_pos;
+            else if (x_pos < min_coordinates[0]) min_coordinates[0] = x_pos;
+
+            //check y
+            if (y_pos > max_coordinates[1]) max_coordinates[1] = y_pos;
+            else if (y_pos < min_coordinates[1]) min_coordinates[1] = y_pos;
+
+            //check z
+            if (z_pos > max_coordinates[2]) max_coordinates[2] = z_pos;
+            else if (z_pos < min_coordinates[2]) min_coordinates[2] = z_pos;
+        }
+    }
+}
+glm::vec3 Model::transformVertex(glm::vec3 vertex)
+{
+    //order of operations for vertex transform is translate, rotate, then scale
+    vertex *= model_location;
+    QuatRotate(model_rotation, vertex);
+    vertex *= model_scale;
+
+    return vertex;
 }
 
 //Helper Functions
